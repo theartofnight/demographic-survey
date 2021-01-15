@@ -28,7 +28,8 @@ class DemographicFileMaker:
         pass
 
     def makeReport(self):
-        pass
+
+        print("wow")
 
     def calculateValues(self):
         
@@ -53,6 +54,13 @@ class DemographicFileMaker:
 
                 self._calcualteEachRow(item)
         
+    
+    def _get_names_from_field(self, field_list):
+
+        keys = [field[0] for field in field_list]
+        return keys
+
+
     def _filterResource(self, filter_item):
 
         filter_item.insert(0, 'ExternalReference')
@@ -91,7 +99,7 @@ class DemographicFileMaker:
     def _init_dict(self, column_fields):
 
         _dict = {}
-        keys = [field[0] for field in column_fields]
+        keys = self._get_names_from_field(column_fields)
 
         for key in keys:
             _dict.update({key: {}})
@@ -198,6 +206,26 @@ class DemographicFileMaker:
         self._country = self._init_dict(self._country_fields)
         self._kite = self._init_dict(self._kite_fields)
 
+        self.index_match = {
+            "": ["Gilead Overall", "Parent Group", "Your Org (2018)"],
+            "Direct Reports (as of April 24, 2018)": self._get_names_from_field(self._direct_report_field),
+            "Grade Group": self._get_names_from_field(self._grade_group_fields),
+            "Tenure Group": self._get_names_from_field(self._tenure_group_fields),
+            "2019 Performance Rating": self._get_names_from_field(self._performance_rating_fields),
+            "2020 Talent Coordinate": self._get_names_from_field(self._talent_cordinate_fields),
+            "Gender": self._get_names_from_field(self._gender_fields),
+            "Ethnicity (US)": self._get_names_from_field(self._ethnicity_fields),
+            "Age Group": self._get_names_from_field(self._age_fields),
+            "Country": self._get_names_from_field(self._country_fields),
+            "Kite": self._get_names_from_field(self._kite_fields),
+        }
+        self.precious_dict = {}
+        for first_index in self.index_match:
+            _ = {}
+            for item in self.index_match[first_index]:
+                _.update({item: {}})
+            self.precious_dict.update({first_index: _})
+
         print("done!")
 
     def _get_sum(self, data, nums, item):
@@ -236,45 +264,58 @@ class DemographicFileMaker:
         
         ## calculate Gilead overall %s
         _dict = self._calculateOverall(self._answered_demographics_data, item)
-        self._gilead_overall.update(_dict)
+        # self._gilead_overall.update(_dict)
+        self.precious_dict[""]["Gilead Overall"].update(_dict)
 
         ## calculate Parent Group %s
         _dict = self._calculateOverall(self._parent_org, item)
-        self._parent_group.update(_dict)
+        # self._parent_group.update(_dict)
+        self.precious_dict[""]["Parent Group"].update(_dict)
 
         ## calculate Your Org(2018) %s
         _dict = self._calculateOverall(self._your_org, item)
-        self._your_org_2018.update(_dict)
+        # self._your_org_2018.update(_dict)
+        self.precious_dict[""]["Your Org (2018)"].update(_dict)
 
         ## calculate Direct reports %s
-        self._calculateSubFields(self._direct_report_field, self._direct_reports, item)
+        self._calculateSubFields(self._direct_report_field, self.precious_dict["Direct Reports (as of April 24, 2018)"], item)
+        # self._calculateSubFields(self._direct_report_field, self._direct_reports, item)
         
         ## calcualte Grade Group %s
-        self._calculateSubFields(self._grade_group_fields, self._grade_group, item)
+        self._calculateSubFields(self._grade_group_fields, self.precious_dict["Grade Group"], item)
+        # self._calculateSubFields(self._grade_group_fields, self._grade_group, item)
 
         ## calcualte Tenure Group %s
-        self._calculateSubFields(self._tenure_group_fields, self._tenure_group, item)
+        self._calculateSubFields(self._tenure_group_fields, self.precious_dict["Tenure Group"], item)
+        # self._calculateSubFields(self._tenure_group_fields, self._tenure_group, item)
 
         ## calculate Performance Rating %s
-        self._calculateSubFields(self._performance_rating_fields, self._performance_rating, item)
+        self._calculateSubFields(self._performance_rating_fields, self.precious_dict["2019 Performance Rating"], item)
+        # self._calculateSubFields(self._performance_rating_fields, self._performance_rating, item)
 
         ## calculate Talent Coordinate %s
-        self._calculateSubFields(self._talent_cordinate_fields, self._talent_cordinate, item)
+        self._calculateSubFields(self._talent_cordinate_fields, self.precious_dict["2020 Talent Coordinate"], item)
+        # self._calculateSubFields(self._talent_cordinate_fields, self._talent_cordinate, item)
 
         ## calculate Gender %s
-        self._calculateSubFields(self._gender_fields, self._gender, item)
+        self._calculateSubFields(self._gender_fields, self.precious_dict["Gender"], item)
+        # self._calculateSubFields(self._gender_fields, self._gender, item)
 
         ## calculate Ethnicity (US) %s
-        self._calculateSubFields(self._ethnicity_fields, self._ethnicity, item)
+        self._calculateSubFields(self._ethnicity_fields, self.precious_dict["Ethnicity (US)"], item)
+        # self._calculateSubFields(self._ethnicity_fields, self._ethnicity, item)
 
         ## calculate Age Group %s
-        self._calculateSubFields(self._age_fields, self._age_group, item)
+        self._calculateSubFields(self._age_fields, self.precious_dict["Age Group"], item)
+        # self._calculateSubFields(self._age_fields, self._age_group, item)
 
         ## calculate Country %s
-        self._calculateSubFields(self._country_fields, self._country, item)
+        self._calculateSubFields(self._country_fields, self.precious_dict["Country"], item)
+        # self._calculateSubFields(self._country_fields, self._country, item)
 
         ## calculate Kite %s
-        self._calculateSubFields(self._kite_fields, self._kite, item)
+        self._calculateSubFields(self._kite_fields, self.precious_dict["Kite"], item)
+        # self._calculateSubFields(self._kite_fields, self._kite, item)
 
     def _calculateOverall(self, dataframe, item):
 
@@ -302,7 +343,7 @@ if __name__ == "__main__":
         'item_code': "./Item Code 2021-01-10.xlsx",
         'demographics': "./Demographics File Sample 2021-01-13.xlsx",
         # 'heatmap_color': "Heatmap Colors.xlsx",
-        'output': "./output",
+        'output': "./output for rest of leaders",
         'leader_id': 112372,
     }
 
