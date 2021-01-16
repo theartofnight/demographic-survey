@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy as np
+import os
 from tqdm import tqdm
 
 class DemographicFileMaker:
@@ -25,11 +25,47 @@ class DemographicFileMaker:
         self._preProcess()
        
     def writeOutput(self):
-        pass
+
+        print("writing...")
+        path = self.output_path + "/" + str(self._leader_id) + " STAR.xlsx"
+        if os.path.exists(path):
+            os.remove(self.output_path + "/" + str(self._leader_id) + " STAR.xlsx")
+        os.makedirs(self.output_path, exist_ok=True)
+        self.whole_frame.to_excel(path, engine="openpyxl")
+        print("done!")
 
     def makeReport(self):
 
-        print("wow")
+        field_picture_postion = str(round(self._participated / self._invited * 100)) + "% Participation Rate" + \
+            "\n" + str(self._participated) + '/' + str(self._invited) + "\n" + "(Participated / Invited)"
+        whole_frame_list = []
+        for key in self.precious_dict:
+            sub_dict = self.precious_dict[key]
+            frames = []
+
+            if key == '':
+                _list = []
+                _list.append("Number of Respondents (incl. N/A)")
+                for criteria, item in self._item_list:
+                    if criteria == 0:
+                        _list.append(item)
+                    elif criteria == 1:
+                        _list.append(self._item_pd[self._item_pd.iloc[:, 0] == item].iloc[0, 3])
+                frames.append(pd.DataFrame({field_picture_postion: _list}))
+
+            for sub_key in sub_dict:
+                sub_item = sub_dict[sub_key]
+                _list = []
+
+                _list.append(self.first_row[sub_key])
+                for criteria, item in self._item_list:
+                    _list.append(sub_item[item])
+
+                frames.append(pd.DataFrame({sub_key: _list}))
+            
+            whole_frame_list.append(pd.concat({key: pd.concat(frames, axis=1)}, axis=1))
+
+        self.whole_frame = pd.concat(whole_frame_list, axis=1)
 
     def calculateValues(self):
         
@@ -45,6 +81,8 @@ class DemographicFileMaker:
                 temp_list.append(item)
             item_dict.update({key:temp_list})
 
+        self._item_list = item_list
+
         for _ in tqdm(item_list):
             criteria, item = _
             if criteria == 0:
@@ -54,6 +92,7 @@ class DemographicFileMaker:
 
                 self._calcualteEachRow(item)
         
+        print("complete!")
     
     def _get_names_from_field(self, field_list):
 
@@ -111,6 +150,8 @@ class DemographicFileMaker:
 
         print("preparing data by leader ID...")
 
+        self.first_row = {}
+
         leader_entry = self.demographics_pd[self.demographics_pd.iloc[:, 0] == self._leader_id]
         for index, level in enumerate(leader_entry.iloc[:, 2 : 11]):
             if (leader_entry[level] == self._leader_id).tolist()[0]:
@@ -123,7 +164,10 @@ class DemographicFileMaker:
 
         ## get Your Org data
         self._your_org = self._answered_demographics_data[self._answered_demographics_data.iloc[:, leader_level] == self._leader_id].reset_index(drop=True)
-        # self._your_org = self.demographics_pd[self.demographics_pd.iloc[:, leader_level] == self._leader_id].reset_index(drop=True)
+        
+        ## calculate nums of participated and invitied
+        self._participated = len(self._your_org.iloc[:, 0])
+        self._invited = len(self.demographics_pd[self.demographics_pd.iloc[:, leader_level] == self._leader_id].reset_index(drop=True).iloc[:, 0])
         
         ## make Parent group.
         self._parent_org = self._answered_demographics_data[self._answered_demographics_data.iloc[:, leader_level - 1] == self._supervisor_id].reset_index(drop=True)
@@ -188,23 +232,6 @@ class DemographicFileMaker:
         _dict = self._your_org.groupby("Kite Employee Flag").groups
         for key in _dict:
             self._kite_fields.append([key, _dict[key]])
-        
-        ## init dict to save all rows data
-        self._gilead_overall = {}
-        self._parent_group = {}
-        self._your_org_2018 = {}
-
-        ## below are deep dictionaries
-        self._direct_reports = self._init_dict(self._direct_report_field)
-        self._grade_group = self._init_dict(self._grade_group_fields)
-        self._tenure_group = self._init_dict(self._tenure_group_fields)
-        self._performance_rating = self._init_dict(self._performance_rating_fields)
-        self._talent_cordinate = self._init_dict(self._talent_cordinate_fields)
-        self._gender = self._init_dict(self._gender_fields)
-        self._ethnicity = self._init_dict(self._ethnicity_fields)
-        self._age_group = self._init_dict(self._age_fields)
-        self._country = self._init_dict(self._country_fields)
-        self._kite = self._init_dict(self._kite_fields)
 
         self.index_match = {
             "": ["Gilead Overall", "Parent Group", "Your Org (2018)"],
@@ -263,66 +290,56 @@ class DemographicFileMaker:
     def _calcualteEachRow(self, item):
         
         ## calculate Gilead overall %s
-        _dict = self._calculateOverall(self._answered_demographics_data, item)
-        # self._gilead_overall.update(_dict)
+        _dict, lens = self._calculateOverall(self._answered_demographics_data, item)
         self.precious_dict[""]["Gilead Overall"].update(_dict)
+        self.first_row.update({"Gilead Overall": lens})
 
         ## calculate Parent Group %s
-        _dict = self._calculateOverall(self._parent_org, item)
-        # self._parent_group.update(_dict)
+        _dict, lens = self._calculateOverall(self._parent_org, item)
         self.precious_dict[""]["Parent Group"].update(_dict)
+        self.first_row.update({"Parent Group": lens})
 
         ## calculate Your Org(2018) %s
-        _dict = self._calculateOverall(self._your_org, item)
-        # self._your_org_2018.update(_dict)
+        _dict, lens = self._calculateOverall(self._your_org, item)
         self.precious_dict[""]["Your Org (2018)"].update(_dict)
+        self.first_row.update({"Your Org (2018)": lens})
 
         ## calculate Direct reports %s
         self._calculateSubFields(self._direct_report_field, self.precious_dict["Direct Reports (as of April 24, 2018)"], item)
-        # self._calculateSubFields(self._direct_report_field, self._direct_reports, item)
         
         ## calcualte Grade Group %s
         self._calculateSubFields(self._grade_group_fields, self.precious_dict["Grade Group"], item)
-        # self._calculateSubFields(self._grade_group_fields, self._grade_group, item)
 
         ## calcualte Tenure Group %s
         self._calculateSubFields(self._tenure_group_fields, self.precious_dict["Tenure Group"], item)
-        # self._calculateSubFields(self._tenure_group_fields, self._tenure_group, item)
 
         ## calculate Performance Rating %s
         self._calculateSubFields(self._performance_rating_fields, self.precious_dict["2019 Performance Rating"], item)
-        # self._calculateSubFields(self._performance_rating_fields, self._performance_rating, item)
 
         ## calculate Talent Coordinate %s
         self._calculateSubFields(self._talent_cordinate_fields, self.precious_dict["2020 Talent Coordinate"], item)
-        # self._calculateSubFields(self._talent_cordinate_fields, self._talent_cordinate, item)
 
         ## calculate Gender %s
         self._calculateSubFields(self._gender_fields, self.precious_dict["Gender"], item)
-        # self._calculateSubFields(self._gender_fields, self._gender, item)
 
         ## calculate Ethnicity (US) %s
         self._calculateSubFields(self._ethnicity_fields, self.precious_dict["Ethnicity (US)"], item)
-        # self._calculateSubFields(self._ethnicity_fields, self._ethnicity, item)
 
         ## calculate Age Group %s
         self._calculateSubFields(self._age_fields, self.precious_dict["Age Group"], item)
-        # self._calculateSubFields(self._age_fields, self._age_group, item)
 
         ## calculate Country %s
         self._calculateSubFields(self._country_fields, self.precious_dict["Country"], item)
-        # self._calculateSubFields(self._country_fields, self._country, item)
 
         ## calculate Kite %s
         self._calculateSubFields(self._kite_fields, self.precious_dict["Kite"], item)
-        # self._calculateSubFields(self._kite_fields, self._kite, item)
 
     def _calculateOverall(self, dataframe, item):
 
         ids = dataframe.iloc[:, 0]
         nums = len(ids)
         working_pd = self._filtered_raw_data[self._filtered_raw_data["ExternalReference"].isin(ids)].reset_index(drop=True)
-        return self._get_sum(working_pd.iloc[:, 1:], nums, item)
+        return self._get_sum(working_pd.iloc[:, 1:], nums, item), len(ids)
     
     def _calculateSubFields(self, dataframe, dictionary, item):
 
@@ -333,7 +350,7 @@ class DemographicFileMaker:
             working_pd = self._filtered_raw_data[self._filtered_raw_data["ExternalReference"].isin(ids)].reset_index(drop=True)
             _dict = self._get_sum(working_pd.iloc[:, 1:], nums, item)
             dictionary[field[0]].update(_dict)
-        return dictionary
+            self.first_row.update({field[0]: len(ids)})
 
 if __name__ == "__main__":
 
