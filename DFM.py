@@ -27,10 +27,17 @@ class DemographicFileMaker:
     def writeOutput(self):
 
         print("writing...")
+        ## specify the path of output file
         path = self.output_path + "/" + str(self._leader_id) + " STAR.xlsx"
+
+        ## if the output file already exists, remove it.
         if os.path.exists(path):
             os.remove(self.output_path + "/" + str(self._leader_id) + " STAR.xlsx")
+
+        ## make a folder to involve the output file.
         os.makedirs(self.output_path, exist_ok=True)
+
+        ## and write the output file.
         self.whole_frame.to_excel(path, engine="openpyxl")
         print("done!")
 
@@ -38,6 +45,7 @@ class DemographicFileMaker:
 
         field_picture_postion = str(round(self._participated / self._invited * 100)) + "% Participation Rate" + \
             "\n" + str(self._participated) + '/' + str(self._invited) + "\n" + "(Participated / Invited)"
+
         whole_frame_list = []
         for key in self.precious_dict:
             sub_dict = self.precious_dict[key]
@@ -73,6 +81,7 @@ class DemographicFileMaker:
 
         item_list = []
         item_dict = {}
+
         for key in self._group_dict:
             item_list.append([0, key])
             temp_list = []
@@ -174,10 +183,10 @@ class DemographicFileMaker:
 
         ## make direct report fields.
         self._direct_report_field = []
-        temp_org = self._your_org[~(self._your_org.iloc[:, 0] == self._leader_id)]
+        temp_org = self._your_org[~(self._your_org.iloc[:, 0] == self._leader_id)].reset_index(drop=True)
         _dict = temp_org.groupby(temp_org.columns.values[leader_level + 1]).groups
         for key in _dict:
-            self._direct_report_field.append([self._answered_demographics_data[self._answered_demographics_data.iloc[:, 0] == key].iloc[0, 1], _dict[key]])
+            self._direct_report_field.append([self.demographics_pd[self.demographics_pd.iloc[:, 0] == key].iloc[0, 1], _dict[key]])
 
         ## make grade group fields.
         self._grade_group_fields = []
