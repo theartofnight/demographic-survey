@@ -17,7 +17,8 @@ class DemographicFileMaker:
         ## read files and save it in object data.
         print("reading files...")
         self.raw_data_pd = pd.read_excel(self.raw_data_file, engine="openpyxl")
-        self.item_code_pd = pd.read_excel(self.item_code_file, engine="openpyxl")
+        self.item_code_pd = pd.read_excel(self.item_code_file, engine="openpyxl", sheet_name="ItemCodeSTAR")
+        self.category_pd =  pd.read_excel(self.item_code_file, engine="openpyxl", sheet_name="CurrentCategorySTAR")
         self.demographics_pd = pd.read_excel(self.demographics_file, engine="openpyxl")
         # self.heatmap_color_pd = pd.read_excel(self.heatmap_color_file, engine="openpyxl")
         print("done!")
@@ -38,7 +39,6 @@ class DemographicFileMaker:
         os.makedirs(self.output_path, exist_ok=True)
 
         ## and write the output file.
-        self.whole_frame.reset_index(drop=True, inplace=True)
         self.whole_frame.to_excel(path, engine="openpyxl")
         print("done!")
 
@@ -51,7 +51,8 @@ class DemographicFileMaker:
         for key in self.precious_dict:
             sub_dict = self.precious_dict[key]
             frames = []
-
+            
+            ## fill the first column.
             if key == '':
                 _list = []
                 _list.append("Number of Respondents (incl. N/A)")
@@ -59,15 +60,19 @@ class DemographicFileMaker:
                     if criteria == 0:
                         _list.append(item)
                     elif criteria == 1:
-                        _list.append(self._item_pd[self._item_pd.iloc[:, 0] == item].iloc[0, 3])
+                        _list.append(self._item_pd[self._item_pd["Item ID"] == item]["Short Text [2020 onward]"].values[0])
                 frames.append(pd.DataFrame({field_picture_postion: _list}))
 
+            ## fill rows.
             for sub_key in sub_dict:
                 sub_item = sub_dict[sub_key]
                 _list = []
 
                 _list.append(self.first_row[sub_key])
                 for criteria, item in self._item_list:
+                    if criteria == 1:
+                        item = self._item_pd[self._item_pd["Item ID"] == item]["Unique Item Code"].values[0]
+
                     _list.append(sub_item[item])
 
                 frames.append(pd.DataFrame({sub_key: _list}))
@@ -86,7 +91,7 @@ class DemographicFileMaker:
         for key in self._group_dict:
             item_list.append([0, key])
             temp_list = []
-            for item in self._item_pd.iloc[self._group_dict[key], 0]:
+            for item in self.category_pd.iloc[self._group_dict[key], 0]:
                 item_list.append([1, item])
                 temp_list.append(item)
             item_dict.update({key:temp_list})
@@ -96,9 +101,9 @@ class DemographicFileMaker:
         for _ in tqdm(item_list):
             criteria, item = _
             if criteria == 0:
-                sub_item_list = item_dict[item]
+                sub_id_list = item_dict[item]
 
-                self._filterResource(sub_item_list)
+                self._filterResource(sub_id_list)
 
                 self._calcualteEachRow(item)
         
@@ -110,8 +115,9 @@ class DemographicFileMaker:
         return keys
 
 
-    def _filterResource(self, filter_item):
+    def _filterResource(self, id_list):
 
+        filter_item = self._item_pd[self._item_pd["Item ID"].isin(id_list)]["Unique Item Code"].tolist()
         filter_item.insert(0, 'ExternalReference')
         self._filtered_raw_data = self.raw_data_pd[filter_item]
 
@@ -119,17 +125,21 @@ class DemographicFileMaker:
     def _preProcess(self):
 
         print("data pre-processing...")
-        self._item_pd = self.item_code_pd.iloc[:, :]
-        self._item_pd = self._item_pd[~self._item_pd[self._item_pd.columns.values[0]].str.endswith("_c")].reset_index(drop=True)
-        self._item_pd = self._item_pd[self._item_pd[self._item_pd.columns.values[0]].isin(self.raw_data_pd.columns.values)].reset_index(drop=True)
 
-        self._group_dict = self._item_pd.groupby([self._item_pd.columns.values[1]]).groups
+        ## make a item group and filter the able source.
+        self._item_pd = self.item_code_pd[self.item_code_pd["Type ID"] == "T01"]
+        self._item_pd = self._item_pd[self._item_pd["Unique Item Code"].isin(self.raw_data_pd.columns.values)].reset_index(drop=True)
+        
+        self.category_pd = self.category_pd[self.category_pd["Item ID in 2020 Survey"].isin(self._item_pd["Item ID"].tolist())]
+        self.category_pd = self.category_pd.drop_duplicates(subset=["Item ID in 2020 Survey"]).reset_index(drop=True)
 
-        self.raw_data_pd = self.raw_data_pd.iloc[2:]
+        self._group_dict = self.category_pd.groupby(["2020 Category"]).groups
+
+        self.raw_data_pd = self.raw_data_pd.iloc[2:].reset_index(drop=True)
 
         ## Convert numeric values into favorable or not.
         ## [1, 2, 3] -> 0, [4, 5] -> 1, [6, -99, ''] -> ''
-        for field in self._item_pd.iloc[:, 0]:
+        for field in self._item_pd["Unique Item Code"]:
             new_list = []
             for item in self.raw_data_pd[field].tolist():
                 if item < 4 and item > 0:
@@ -139,10 +149,39 @@ class DemographicFileMaker:
                 else:
                     new_list.append('')
             self.raw_data_pd[field] = new_list
-        
+
+        ## new feature -> process A/B pair to calculate easily.
+        pairs = self._item_pd[self._item_pd["AB Code"].isin(["A", "B"])].reset_index(drop=True)
+        pairs_dict = pairs.groupby(["Item ID"]).groups
+
+        for key in pairs_dict:
+
+            _list = pairs_dict[key]
+            pairs_row = pairs.iloc[_list, :]
+            item_list = pairs_row["Unique Item Code"].tolist()
+            text_list = pairs_row["Short Text [2020 onward]"].tolist()
+            new_text = "/".join(text_list)
+            self._item_pd = self._item_pd[~(self._item_pd["Unique Item Code"] == item_list[1])].reset_index(drop=True)
+            _index = self._item_pd[self._item_pd["Unique Item Code"] == item_list[0]].index
+            self._item_pd.loc[_index, "Short Text [2020 onward]"] = new_text
+
+            column_pair = self.raw_data_pd[item_list]
+            _list = []
+            for index in range(len(column_pair.index)):
+                _row = column_pair.iloc[index, :].tolist()
+                for val in _row:
+                    if type(val) == type(0):
+                        _list.append(val)
+                        break
+                else:
+                    _list.append('')
+            _pd = pd.DataFrame(_list, columns=[item_list[0]])
+            self.raw_data_pd = self.raw_data_pd.drop(columns=[item_list[1]])
+            self.raw_data_pd[item_list[0]] = _pd
+
         ## convert the demographics data to include only answered entries.
         self._answered_demographics_data = self.demographics_pd[self.demographics_pd.iloc[:, 0].isin(self.raw_data_pd['ExternalReference'].tolist())].reset_index(drop=True)
-
+ 
         print("done!")
     
     def _init_dict(self, column_fields):
@@ -382,8 +421,8 @@ if __name__ == "__main__":
 
     ## Create a object.
     init_data = {
-        'raw_data': "./Qualtrics Survey Export Sample 2021-01-13.xlsx",
-        'item_code': "./Item Code 2021-01-10.xlsx",
+        'raw_data': "./Qualtrics Survey Export Sample New.xlsx",
+        'item_code': "./Item Code New.xlsx",
         'demographics': "./Demographics File Sample 2021-01-13.xlsx",
         # 'heatmap_color': "Heatmap Colors.xlsx",
         'output': "./output for rest of leaders",
