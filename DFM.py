@@ -38,6 +38,7 @@ class DemographicFileMaker:
         os.makedirs(self.output_path, exist_ok=True)
 
         ## and write the output file.
+        self.whole_frame.reset_index(drop=True, inplace=True)
         self.whole_frame.to_excel(path, engine="openpyxl")
         print("done!")
 
@@ -268,8 +269,6 @@ class DemographicFileMaker:
 
         _dict = {}
         determine_parent_na = False
-        total = 0
-        len_total = len(data.columns) * nums
 
         for ind in range(len(data.columns)):
             _ = data.iloc[:, ind]
@@ -280,10 +279,8 @@ class DemographicFileMaker:
                 if __ != '':
                     is_empty_column = False
                     sub += __
-                    total += __
                 else:
                     lens -= 1
-                    len_total -= 1
             if is_empty_column:
                 _dict.update({data.columns.values[ind]: "N/A"})
                 determine_parent_na = True
@@ -293,7 +290,27 @@ class DemographicFileMaker:
         if determine_parent_na:
             _dict.update({item: "N/A"})
         else:
-            _dict.update({item: str(round(total / len_total * 100)) + "%"})
+            total_lens = nums
+            total = 0
+            cols = len(data.columns)
+            for ind in range(nums):
+                _series = data.iloc[ind, :]
+                sub_sum = 0
+                _is_nan = False
+                for val in _series:
+                    if val != '':
+                        sub_sum += val
+                    else:
+                        _is_nan = True
+                        total_lens -= 1
+                        break
+
+                if not _is_nan:
+                    total += sub_sum / cols
+            if total_lens == 0:
+                _dict.update({item: "N/A"})
+            else:
+                _dict.update({item: str(round(total / total_lens * 100)) + "%"})
         return _dict
 
     def _calcualteEachRow(self, item):
