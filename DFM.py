@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import openpyxl
 from tqdm import tqdm
 
 class DemographicFileMaker:
@@ -358,7 +359,7 @@ class DemographicFileMaker:
             if total_lens == 0:
                 _dict.update({item: "N/A"})
             else:
-                _dict.update({item: str(round(sub / lens * 100)) + "%"})
+                _dict.update({item: str(round(total / total_lens * 100)) + "%"})
         return _dict
 
     def _calcualteEachRow(self, item):
