@@ -1,6 +1,9 @@
 import pandas as pd
 import os
 import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Color, Border, Side, numbers
+from openpyxl.drawing.image import Image
+from openpyxl.utils import cell as ce
 from tqdm import tqdm
 
 class DemographicFileMaker:
@@ -12,7 +15,9 @@ class DemographicFileMaker:
         self.demographics_file = args['demographics']
         self.output_path = args['output']
         self._leader_id = args['leader_id']
-        # self.heatmap_color_file = args['heatmap_color']
+        self.heatmap_color_file = args['heatmap_color']
+        self.image_src = args['image']
+
 
         self.performance_order = [
             "Exceptional",
@@ -30,7 +35,7 @@ class DemographicFileMaker:
         self.item_code_pd = pd.read_excel(self.item_code_file, engine="openpyxl", sheet_name="ItemCodeSTAR")
         self.category_pd =  pd.read_excel(self.item_code_file, engine="openpyxl", sheet_name="CurrentCategorySTAR")
         self.demographics_pd = pd.read_excel(self.demographics_file, engine="openpyxl")
-        # self.heatmap_color_pd = pd.read_excel(self.heatmap_color_file, engine="openpyxl")
+        self.heatmap_color_pd = pd.read_excel(self.heatmap_color_file, engine="openpyxl")
         print("done!")
 
         self._preProcess()
@@ -49,47 +54,216 @@ class DemographicFileMaker:
         os.makedirs(self.output_path, exist_ok=True)
 
         ## and write the output file.
-        self.whole_frame.to_excel(path, engine="openpyxl")
+        self.book.save(path)
         print("done!")
 
     def makeReport(self):
 
+        ## make a content to be displayed in the picture position.
         field_picture_postion = str(round(self._participated / self._invited * 100)) + "% Participation Rate" + \
             "\n" + str(self._participated) + '/' + str(self._invited) + "\n" + "(Participated / Invited)"
-        
-        whole_frame_list = []
+
+        ## prepare image.
+        img  = Image(self.image_src)
+        img.height = 90
+        img.width = 110
+
+        ## calculate total rows that will be placed in our output file.
+        total_rows = 4 + len(self._item_list)
+
+        ## make a workbook and sheet.
+        self.book = openpyxl.Workbook()
+        sheet = self.book.active
+
+        ## set styles like font, color, direction, border...
+        ft = Font(name="Arial", size=8)
+        ft_bold = Font(name="Arial", size=8, bold=True)
+        light_na_font = Font(name="Arial", size=8, color="999999")
+        bold_na_font = Font(name="Arial", size=8, color="999999", bold=True)
+        vertical = Alignment(textRotation=90, horizontal='center')
+        center_alignment = Alignment(horizontal='center')
+        right_alignment = Alignment(horizontal='right')
+        grey_back = PatternFill("solid", fgColor="EEEEEE")
+        white_back = PatternFill("solid", fgColor="FFFFFF")
+        side = Side(style='thin', color="CCCCCC")
+        thin_border = Border(left=side,
+                     right=side,
+                     top=side,
+                     bottom=side)
+
+        ## merge all needed columns and rows.
+        col_num = 1
+        skip_list = []
         for key in self.precious_dict:
+            delta = len(self.precious_dict[key]) - 1
+            if col_num == 1:
+                delta += 1
+            end_col = delta + col_num
+            cell = sheet.cell(row=1, column=col_num)
+            cell.font = ft
+            cell.value = key
+            sheet.merge_cells(start_row=1, start_column=col_num, end_row=2, end_column=end_col)
+            col_num += delta + 2
+
+            ## make a skip_list which will be used to make a empty column between groups.
+            skip_list.append(col_num - 1)
+
+        ## set empty cells white.
+        for row in range(1, total_rows + 1 + 1):
+            for col in range(1, col_num - 2 + 1 + 1):
+                sheet.cell(row=row, column=col).fill = white_back
+
+        ## prepare the whole data to be placed in the sheet.
+        frames = []
+        for key in tqdm(self.precious_dict, desc="prepare the whole data"):
             sub_dict = self.precious_dict[key]
-            frames = []
             
-            ## fill the first column.
+            ## prepare and write the first column data.
             if key == '':
                 _list = []
-                _list.append("Number of Respondents (incl. N/A)")
+                _list.append([field_picture_postion, 1])
+                _list.append(["Number of Respondents (incl. N/A)", 1])
                 for criteria, item in self._item_list:
                     if criteria == 0:
-                        _list.append(item)
+                        _list.append([item, 0])
                     elif criteria == 1:
-                        _list.append(self._item_pd[self._item_pd["Item ID"] == item]["Short Text [2020 onward]"].values[0])
-                frames.append(pd.DataFrame({field_picture_postion: _list}))
+                        _list.append([self._item_pd[self._item_pd["Item ID"] == item]["Short Text [2020 onward]"].values[0], 1])
+                
+                ## write the first column data and set styles.
+                for index, item in enumerate(_list):
+                    cell = sheet.cell(row=3 + index, column=1)
+                    if item[1] == 0:
+                        cell.font = ft_bold
+                    else:
+                        cell.font = ft
 
-            ## fill rows.
+                    cell.border = thin_border
+                    cell.fill = grey_back
+
+                    ## set value to cell.
+                    cell.value = item[0]
+
+            ## prepare the rest of data to fill other columns
             for sub_key in sub_dict:
                 sub_item = sub_dict[sub_key]
                 _list = []
-
-                _list.append(self.first_row[key + sub_key])
+                _list.append([sub_key, 2])
+                _list.append([self.first_row[key + sub_key], 1])
                 for criteria, item in self._item_list:
                     if criteria == 1:
                         item = self._item_pd[self._item_pd["Item ID"] == item]["Unique Item Code"].values[0]
 
                     _list.append(sub_item[item])
 
-                frames.append(pd.DataFrame({sub_key: _list}))
-            
-            whole_frame_list.append(pd.concat({key: pd.concat(frames, axis=1)}, axis=1))
+                frames.append(_list)
+        
+        ## this method is used to make a empty column when write columns.
+        def get_column_number(number):
 
-        self.whole_frame = pd.concat(whole_frame_list, axis=1)
+            for num in skip_list:
+                if number >= num:
+                    number += 1
+            return number
+        
+        ## below method is used to calculate delta.
+        def get_delta(first, second):
+            return round(second * 100) - round(first * 100)
+
+        gilead_org = frames[0]
+        parent_org = frames[1]
+        your_org = frames[2]
+
+        ## write the rest of the columns and set styles.
+        for col_index, column in enumerate(tqdm(frames, desc="formating and styling")):
+            for row_index, item in enumerate(column):
+                cell = sheet.cell(row=3 + row_index, column = get_column_number(2 + col_index))
+
+                ## set borders of all cells.
+                cell.border = thin_border
+
+                ## set background grey of the row->4.
+                if row_index == 1:
+                    cell.fill = grey_back
+
+                ## if the cell is placed in category row, set bold font style. Otherwise set general font style.
+                if item[1] == 0:
+                    cell.font = ft_bold
+                else:
+                    cell.font = ft
+
+                ## set corresponding styles to row->3
+                if item[1] == 2:
+                    cell.alignment = center_alignment
+                    cell.alignment = vertical
+                    cell.fill = grey_back
+                
+                ## set value to cell.
+                cell.value = item[0]
+
+                ## make "N/A" cell lightgrey.
+                if row_index >= 1:
+                    if item[0] == "N/A":
+                        cell.alignment = right_alignment
+                        cell.font = bold_na_font if item[1] == 0 else light_na_font
+
+                ## set background color and set format of percentage to rows below 5.
+                if row_index >= 2:
+
+                    ## set format percentage.
+                    cell.number_format = numbers.FORMAT_PERCENTAGE
+
+                    ## compare the rest of the columns with your org and set background.
+                    if col_index >= 3:
+                        try:
+                            cell.fill = PatternFill("solid", fgColor=self._get_color(get_delta(your_org[row_index][0], item[0])))
+                        except:
+                            ## this skip the case of N/A
+                            pass
+
+                    ## compare your org (2018) with parent org and set background.
+                    elif col_index == 2:
+                        try:
+                            cell.fill = PatternFill("solid", fgColor=self._get_color(get_delta(parent_org[row_index][0], item[0])))
+                        except:
+                            ## this skip the case of N/A
+                            pass
+
+                    ## compare parent org with gilead org and set background.
+                    elif col_index == 1:
+                        try:
+                            cell.fill = PatternFill("solid", fgColor=self._get_color(get_delta(gilead_org[row_index][0], item[0])))
+                        except:
+                            ## this skip the case of N/A
+                            pass
+
+        ## set width of the first column.
+        sheet.column_dimensions['A'].width = 25
+
+        ## set columns' width and empty columns' width.
+        for i in range(2, col_num - 2 + 1):
+            name = ce.get_column_letter(i)
+            if i in skip_list:
+                sheet.column_dimensions[name].width = 0.8
+            else:
+                sheet.column_dimensions[name].width = 3.8
+        
+        ## set all rows' height.
+        for i in range(1, total_rows + 1):
+            if i == 3:
+                sheet.row_dimensions[i].height = 95
+            else:
+                sheet.row_dimensions[i].height = 10
+
+        ## freeze panes.
+        sheet.freeze_panes = 'E5'
+
+        ## push content right in A3, A4.
+        sheet['A3'].alignment = right_alignment
+        sheet['A4'].alignment = right_alignment
+
+        ## insert picture and set background white
+        sheet['A3'].fill = white_back
+        sheet.add_image(img, 'A3')
 
     def calculateValues(self):
         
@@ -97,8 +271,10 @@ class DemographicFileMaker:
 
         item_list = []
         item_dict = {}
+        category_list = []
 
         for key in self.order_category:
+            category_list.append(key)
             item_list.append([0, key])
             temp_list = []
             for item in self.category_pd.iloc[self._group_dict[key], 0]:
@@ -108,14 +284,12 @@ class DemographicFileMaker:
 
         self._item_list = item_list
 
-        for _ in tqdm(item_list):
-            criteria, item = _
-            if criteria == 0:
-                sub_id_list = item_dict[item]
+        for category in tqdm(category_list, desc="iterating over the list of category"):
+            sub_id_list = item_dict[category]
 
-                self._filterResource(sub_id_list)
+            self._filterResource(sub_id_list)
 
-                self._calcualteEachRow(item)
+            self._calcualteEachRow(category)
         
         print("complete!")
     
@@ -131,7 +305,14 @@ class DemographicFileMaker:
         filter_item.insert(0, 'ExternalReference')
         self._filtered_raw_data = self.raw_data_pd[filter_item]
 
-    ## do pre-process the data to be prepared in order to calculate.
+    def _get_color(self, delta):
+        if delta > 25:
+            delta = 25
+        elif delta < -25:
+            delta = -25
+        series = self.heatmap_color_pd[self.heatmap_color_pd["Delta"] == delta]
+        return str(hex(series["R"].values[0]))[2:] + str(hex(series["G"].values[0]))[2:] + str(hex(series["B"].values[0]))[2:]
+
     def _preProcess(self):
 
         print("data pre-processing...")
@@ -331,13 +512,13 @@ class DemographicFileMaker:
                 else:
                     lens -= 1
             if is_empty_column:
-                _dict.update({data.columns.values[ind]: "N/A"})
+                _dict.update({data.columns.values[ind]: ["N/A", 1]})
                 determine_parent_na = True
             else:
-                _dict.update({data.columns.values[ind]: str(round(sub / lens * 100)) + "%"})
+                _dict.update({data.columns.values[ind]: [sub / lens, 1]})
         
         if determine_parent_na:
-            _dict.update({item: "N/A"})
+            _dict.update({item: ["N/A", 0]})
         else:
             total_lens = nums
             total = 0
@@ -357,9 +538,9 @@ class DemographicFileMaker:
                 if not _is_nan:
                     total += sub_sum / cols
             if total_lens == 0:
-                _dict.update({item: "N/A"})
+                _dict.update({item: ["N/A", 0]})
             else:
-                _dict.update({item: str(round(total / total_lens * 100)) + "%"})
+                _dict.update({item: [total / total_lens, 0]})
         return _dict
 
     def _calcualteEachRow(self, item):
@@ -435,8 +616,9 @@ if __name__ == "__main__":
         'raw_data': "./Qualtrics Survey Export Sample New.xlsx",
         'item_code': "./Item Code New.xlsx",
         'demographics': "./Demographics File Sample 2021-01-17.xlsx",
-        # 'heatmap_color': "Heatmap Colors.xlsx",
+        'heatmap_color': "Heatmap Colors.xlsx",
         'output': "./output for rest of leaders",
+        'image': "./image.png",
         'leader_id': 112372,
     }
 
