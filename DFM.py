@@ -41,9 +41,6 @@ class DemographicFileMaker:
         self._leader_id = id
         self.GM = GM
 
-        # self._leader = 112372
-        # self.GM = False
-
     def readAllFiles(self):
         ## read files and save it in object data.
         self.origin_raw_data_pd = pd.read_excel(self.input_source + "/" + self.raw_data_file, engine="openpyxl")
@@ -220,10 +217,15 @@ class DemographicFileMaker:
                     if len(item[0]) > _:
                         _ = len(item[0])
 
-                sheet.column_dimensions["A"].width = _ / 1.7
+                sheet.column_dimensions["A"].width = _ / 1.6
 
             ## prepare the rest of data to fill other columns
             for sub_key in sub_dict:
+
+                len_sub_key = 0
+                if len(sub_key) > len_sub_key:
+                    len_sub_key = len(sub_key)
+
                 sub_item = sub_dict[sub_key]
                 _list = []
                 if sub_key == "Δ Your Org (2018)" and self.logic == 1:
@@ -234,6 +236,8 @@ class DemographicFileMaker:
                     _list.append([self._supervisor_last_name + " Org", 2])
                 elif sub_key == "Your Org (2020)" and self.GM:
                     _list.append([self.GM + " (2020)", 2])
+                elif sub_key.endswith("Office"):
+                    _list.append(["Office", 2])
                 else:
                     _list.append([sub_key, 2])
                 _list.append([self.first_row[key + sub_key], 1])
@@ -381,12 +385,14 @@ class DemographicFileMaker:
             if i in skip_list:
                 sheet.column_dimensions[name].width = 0.8
             else:
-                sheet.column_dimensions[name].width = 4.1
+                sheet.column_dimensions[name].width = 4.5
         
         ## set all rows' height.
         for i in range(1, total_rows + 1):
             if i == 3:
                 sheet.row_dimensions[i].height = 95
+                if len_sub_key > 20:
+                    sheet.row_dimensions[i].height = len_sub_key / 20 * 95
             else:
                 sheet.row_dimensions[i].height = 10.2
 
@@ -543,13 +549,13 @@ class DemographicFileMaker:
         self._answered_demographics_data = self.demographics_pd[self.demographics_pd.loc[:, "MCJ ID"].isin(self.raw_data_pd['ExternalReference'].tolist())].reset_index(drop=True)
         self._gilead_org = self._answered_demographics_data
 
-        if self.GM:
-            self._answered_demographics_data = self._answered_demographics_data[self._answered_demographics_data[self.GM] == 1].reset_index(drop=True)
-            # self._answered_demographics_data = self._answered_demographics_data[self._answered_demographics_data[self.GM] == 1].reset_index(drop=True)
-
         ## do the same process about history data.
         self._answered_demographics_past_data = self.demographics_past_pd[self.demographics_past_pd.loc[:, "MCJ ID"].isin(self.raw_data_past_pd['ExternalReference'].tolist())].reset_index(drop=True)
     
+        if self.GM:
+            self._gm_demographics_data = self._answered_demographics_data[self._answered_demographics_data[self.GM] == 1].reset_index(drop=True)
+            self._gm_demographics_past_data = self._answered_demographics_past_data[self._answered_demographics_past_data[self.GM] == 1].reset_index(drop=True)
+        
     def _get_past_field_name_by_current_name(self, field_name):
         _item_id = self._item_pd[self._item_pd["Unique Item Code"] == field_name]["Item ID"].values[0]
         try:
@@ -614,19 +620,30 @@ class DemographicFileMaker:
             self._your_org = self._answered_demographics_data
             self._invited = len(self.demographics_pd.index)
         else:
-            self._your_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
-            self._invited = len(self.demographics_pd[self.demographics_pd.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
+            if self.GM:
+                self._your_org = self._gm_demographics_data
+                self._invited = len(self.origin_demographics_pd[self.origin_demographics_pd[self.GM] == 1].index)
+            else:
+                self._your_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+                self._invited = len(self.demographics_pd[self.demographics_pd.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
         
         ## calculate nums of participated
         self._participated = len(self._your_org.loc[:, "MCJ ID"])
         
         ## get your history group
-        self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+        if self.GM:
+            self._your_past_org = self._gm_demographics_past_data
+        else:
+            self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
 
 
         ## make direct report fields.
         self._direct_report_field = []
         temp_org = self._your_org[~(self._your_org.loc[:, "MCJ ID"] == self._leader_id)].reset_index(drop=True)
+
+        if self.GM:
+            temp_org = temp_org[temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+
         _dict = temp_org.groupby(_temp.format(direct_level)).groups
         for key in _dict:
             try:
@@ -708,7 +725,7 @@ class DemographicFileMaker:
 
         self.index_match = {
             "": ["Gilead Overall", "Parent Group", "Your Org (2020)"],
-            "Direct Reports (as of April 24, 2018)": self._get_names_from_field(self._direct_report_field),
+            "Direct Reports (as of April 24, 2018)": sorted(self._get_names_from_field(self._direct_report_field)),
             "delta": ["Δ Your Org (2018)", "Δ External"],
             "Grade Group": self._get_names_from_field(self._grade_group_fields),
             "Tenure Group": self._get_names_from_field(self._tenure_group_fields),
@@ -816,7 +833,7 @@ class DemographicFileMaker:
         else:
             working_pd = self._filtered_raw_data[self._filtered_raw_data["ExternalReference"].isin(ids)].reset_index(drop=True)
         nums = len(working_pd.iloc[:, 0])
-        return self._get_sum(working_pd.iloc[:, 1:], nums, item, history and self._helper_past), len(ids)
+        return self._get_sum(working_pd.iloc[:, 1:], nums, item, history), len(ids)
     
     def _calculateSubFields(self, dataframe, column_name, item):
 
@@ -881,7 +898,7 @@ class DemographicFileMaker:
                 if not _is_nan:
                     total += sub_sum / cols
 
-            if total_lens == 0:
+            if total_lens < 4:
                 _dict.update({item: ["N/A", 0]})
             else:
                 _dict.update({item: [round(total / total_lens, 2), 0]})
