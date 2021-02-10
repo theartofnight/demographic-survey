@@ -546,11 +546,13 @@ class DemographicFileMaker:
         self.demographics_pd = self.origin_demographics_pd
 
         ## convert the demographics data to include only answered entries.
-        self._answered_demographics_data = self.demographics_pd[self.demographics_pd.loc[:, "MCJ ID"].isin(self.raw_data_pd['ExternalReference'].tolist())].reset_index(drop=True)
+        self._invited_demographics_data = self.demographics_pd[self.demographics_pd["Invitee Flag"] == 1].reset_index(drop=True)
+        self._answered_demographics_data = self._invited_demographics_data[self._invited_demographics_data.loc[:, "Worker ID"].isin(self.raw_data_pd['ExternalReference'].tolist())].reset_index(drop=True)
         self._gilead_org = self._answered_demographics_data
 
         ## do the same process about history data.
-        self._answered_demographics_past_data = self.demographics_past_pd[self.demographics_past_pd.loc[:, "MCJ ID"].isin(self.raw_data_past_pd['ExternalReference'].tolist())].reset_index(drop=True)
+        self._invited_demographics_past_data = self.demographics_past_pd[self.demographics_past_pd["Invitee Flag"] == 1].reset_index(drop=True)
+        self._answered_demographics_past_data = self._invited_demographics_past_data[self._invited_demographics_past_data.loc[:, "Worker ID"].isin(self.raw_data_past_pd['ExternalReference'].tolist())].reset_index(drop=True)
     
         if self.GM:
             self._gm_demographics_data = self._answered_demographics_data[self._answered_demographics_data[self.GM] == 1].reset_index(drop=True)
@@ -584,9 +586,9 @@ class DemographicFileMaker:
         ## find the supervisor level of the given leader id.
 
         self.first_row = {}
-        _temp = "Supervisor Level {} MCJ ID"
+        _temp = "Supervisor Level {} ID"
 
-        leader_entry = self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "MCJ ID"] == self._leader_id]
+        leader_entry = self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == self._leader_id]
 
         if self._leader_id == 999999:
             self.logic = 1
@@ -597,8 +599,8 @@ class DemographicFileMaker:
                     leader_level = index + 2
                     break
         
-        self.output_path = "/" + leader_entry["MCJ Name"].values[0]
-        self.file_name = leader_entry["MCJ Last Name"].values[0]
+        self.output_path = "/" + leader_entry["Worker Name"].values[0]
+        self.file_name = leader_entry["Worker Last Name"].values[0]
 
         supervisor_level = leader_level - 1
         direct_level = leader_level + 1
@@ -606,8 +608,8 @@ class DemographicFileMaker:
         if leader_level >= 3:
             self.logic = 3
             self._supervisor_id = leader_entry.loc[:, _temp.format(supervisor_level)].values[0]
-            _supervisor_entry = self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "MCJ ID"] == self._supervisor_id]
-            self._supervisor_last_name = _supervisor_entry["MCJ Last Name"].values[0]
+            _supervisor_entry = self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == self._supervisor_id]
+            self._supervisor_last_name = _supervisor_entry["Worker Last Name"].values[0]
 
             ## get Parent group.
             self._parent_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(supervisor_level)] == self._supervisor_id].reset_index(drop=True)
@@ -618,28 +620,32 @@ class DemographicFileMaker:
         ## get Your Org data
         if self.logic == 1:
             self._your_org = self._answered_demographics_data
-            self._invited = len(self.demographics_pd.index)
+            self._invited = len(self._invited_demographics_data.index)
         else:
             if self.GM:
                 self._your_org = self._gm_demographics_data
-                self._invited = len(self.origin_demographics_pd[self.origin_demographics_pd[self.GM] == 1].index)
+                self._invited = len(self._invited_demographics_data[self._invited_demographics_data[self.GM] == 1].index)
             else:
                 self._your_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
-                self._invited = len(self.demographics_pd[self.demographics_pd.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
+                self._invited = len(self._invited_demographics_data[self._invited_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
         
         ## calculate nums of participated
-        self._participated = len(self._your_org.loc[:, "MCJ ID"])
+        self._participated = len(self._your_org.loc[:, "Worker ID"])
         
         ## get your history group
         if self.GM:
             self._your_past_org = self._gm_demographics_past_data
         else:
-            self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+            if self.logic == 1:
+                # self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data["Worker ID"].isin(self._your_org["Worker ID"].tolist())].reset_index(drop=True)
+                self._your_past_org = self._answered_demographics_past_data
+            else:
+                self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
 
 
         ## make direct report fields.
         self._direct_report_field = []
-        temp_org = self._your_org[~(self._your_org.loc[:, "MCJ ID"] == self._leader_id)].reset_index(drop=True)
+        temp_org = self._your_org[~(self._your_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
 
         if self.GM:
             temp_org = temp_org[temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
@@ -647,7 +653,7 @@ class DemographicFileMaker:
         _dict = temp_org.groupby(_temp.format(direct_level)).groups
         for key in _dict:
             try:
-                self._direct_report_field.append([self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "MCJ ID"] == key].loc[:, "MCJ Name"].values[0], _dict[key]])
+                self._direct_report_field.append([self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0], _dict[key]])
             except:
                 pass
 
@@ -655,7 +661,7 @@ class DemographicFileMaker:
         self._grade_group_fields = []
         _dict = self._your_org.groupby("Pay Grade Group").groups
         for key in _dict:
-            self._grade_group_fields.append([key, _dict[key]])
+            self._grade_group_fields.append([str(key), _dict[key]])
 
         ## make tenure group fields.
         self._tenure_group_fields = []
@@ -914,10 +920,10 @@ if __name__ == "__main__":
         'leader': "List of Leaders and GMs 2021-01-26.xlsx",
         'raw_data': "Qualtrics Survey Export Sample New.xlsx",
         'item_code': "Item Code SHARE 2021-01-23.xlsx",
-        'demographics': "Demographics File Sample 2021-01-26.xlsx",
+        'demographics': "2020 Demographics File Sample 2021-02-05.xlsx",
         'heatmap_color': "Heatmap Colors.xlsx",
         'raw_data_past': "2018 Employee Survey Responses Sample 2021-01-23.xlsx",
-        'demographics_past': "2018 Demographics File Sample 2021-01-26.xlsx",
+        'demographics_past': "2018 Demographics File Sample 2021-02-05.xlsx",
         'benchmark': "External Benchmarks.xlsx",
         'output_folder': "./output",
         'input_folder': "./input",
