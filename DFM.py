@@ -27,6 +27,7 @@ class DemographicFileMaker:
         self.leader_file = args['leader']
         self.output_source = args['output_folder']
         self.input_source = args['input_folder']
+        self.how2use_file = args['how to use']
         
         self.performance_order = [
             "Exceptional",
@@ -41,6 +42,9 @@ class DemographicFileMaker:
         self._leader_id = id
         self.GM = GM
 
+        self._leader_id = 112372
+        self.GM = False
+
     def readAllFiles(self):
         ## read files and save it in object data.
         self.origin_raw_data_pd = pd.read_excel(self.input_source + "/" + self.raw_data_file, engine="openpyxl")
@@ -53,6 +57,8 @@ class DemographicFileMaker:
         self.benchmark_pd = pd.read_excel(self.input_source + "/" + self.benchmark_file, engine="openpyxl")
         self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
         self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
+        self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Demographic Trends How to Use")
+
 
     def calculateValues(self):
         
@@ -92,7 +98,7 @@ class DemographicFileMaker:
         if self.GM:
             self.file_name = self.GM[:-4]
             self.output_path = "/" + self.file_name
-        path = self.output_source + self.output_path + "/" + "2021-04 Employee Survey - " + self.file_name + " - Results by Demographics.xlsx"
+        path = self.output_source + self.output_path + "/" + "2021-04 Global Employee Survey - " + self.file_name + " - Demographic Trends.xlsx"
 
         ## if the output file already exists, remove it.
         if os.path.exists(path):
@@ -124,8 +130,8 @@ class DemographicFileMaker:
                 del self.precious_dict[key]
 
         ## make a content to be displayed in the picture position.
-        field_picture_postion = str(round(self._participated / self._invited * 100)) + "% Participation Rate" + \
-            "\n" + str(self._participated) + ' / ' + str(self._invited) + "\n" + "(Participated / Invited)"
+        field_picture_position = str(round(self._participated / self._invited * 100)) + "% Participation Rate" + \
+            "\n" + f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + "\n" + "(Participated / Invited)"
 
         ## prepare image.
         img  = Image(self.input_source + "/" + self.image_src)
@@ -138,6 +144,7 @@ class DemographicFileMaker:
         ## make a workbook and sheet.
         self.book = openpyxl.Workbook()
         sheet = self.book.active
+        sheet.title = "Demographic Trends"
 
         ## set styles like font, color, direction, border...
         ft = Font(name="Arial", size=8)
@@ -180,6 +187,7 @@ class DemographicFileMaker:
                 sheet.cell(row=row, column=col).fill = white_back
 
         ## prepare the whole data to be placed in the sheet.
+        len_sub_key = 0
         frames = []
         for key in tqdm(self.precious_dict, desc="prepare the whole data"):
             sub_dict = self.precious_dict[key]
@@ -187,7 +195,7 @@ class DemographicFileMaker:
             ## prepare and write the first column data.
             if key == '':
                 _list = []
-                _list.append([field_picture_postion, 1])
+                _list.append([field_picture_position, 1])
                 _list.append(["Number of Respondents (incl. N/A)", 1])
                 for criteria, item in self._item_list:
                     if criteria == 0:
@@ -217,12 +225,14 @@ class DemographicFileMaker:
                     if len(item[0]) > _:
                         _ = len(item[0])
 
-                sheet.column_dimensions["A"].width = _ / 1.6
+                sheet.column_dimensions["A"].width = _ / 1.5
+
+                if _ < 40:
+                     sheet.column_dimensions["A"].width = 26
 
             ## prepare the rest of data to fill other columns
             for sub_key in sub_dict:
 
-                len_sub_key = 0
                 if len(sub_key) > len_sub_key:
                     len_sub_key = len(sub_key)
 
@@ -238,6 +248,8 @@ class DemographicFileMaker:
                     _list.append([self.GM + " (2020)", 2])
                 elif sub_key.endswith("Office"):
                     _list.append(["Office", 2])
+                elif sub_key.endswith(" - COMM"):
+                    _list.append([sub_key[:-7], 2])
                 else:
                     _list.append([sub_key, 2])
                 _list.append([self.first_row[key + sub_key], 1])
@@ -390,14 +402,14 @@ class DemographicFileMaker:
         ## set all rows' height.
         for i in range(1, total_rows + 1):
             if i == 3:
-                sheet.row_dimensions[i].height = 95
-                if len_sub_key > 20:
-                    sheet.row_dimensions[i].height = len_sub_key / 20 * 95
+                sheet.row_dimensions[i].height = 75
+                if len_sub_key > 15:
+                    sheet.row_dimensions[i].height = len_sub_key * 5
             else:
                 sheet.row_dimensions[i].height = 10.2
 
         ## freeze panes.
-        sheet.freeze_panes = ce.get_column_letter(self.logic + 2) + '5'
+        sheet.freeze_panes = ce.get_column_letter(self.logic + 3) + '5'
 
         ## push content right in A3, A4.
         sheet['A3'].alignment = right_alignment
@@ -412,6 +424,19 @@ class DemographicFileMaker:
         sheet['A3'].alignment = sheet['A3'].alignment.copy(wrapText=True, vertical="bottom")
         sheet.add_image(img)
     
+        how_sheet = self.book.create_sheet("How to Use")
+        cell = how_sheet.cell(column=1, row=1)
+        cell.value = self.how2use_pd.columns.values[0]
+        cell.alignment = Alignment(wrapText=True)
+        how_sheet.row_dimensions[1].height = 40
+        for index in range(len(self.how2use_pd.index)):
+            cell = how_sheet.cell(column=1, row=2 + index)
+            cell.value = self.how2use_pd.iloc[index, 0]
+            cell.alignment = Alignment(wrapText=True)
+            how_sheet.row_dimensions[index + 2].height = 40
+
+        how_sheet.column_dimensions["A"].width = 135
+
     def _get_names_from_field(self, field_list):
 
         keys = [field[0] for field in field_list]
@@ -637,7 +662,6 @@ class DemographicFileMaker:
             self._your_past_org = self._gm_demographics_past_data
         else:
             if self.logic == 1:
-                # self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data["Worker ID"].isin(self._your_org["Worker ID"].tolist())].reset_index(drop=True)
                 self._your_past_org = self._answered_demographics_past_data
             else:
                 self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
@@ -685,13 +709,19 @@ class DemographicFileMaker:
             except:
                 pass
         for key in _list:
-            self._performance_rating_fields.append([key, _dict[key]])
+            if key == "Unspecified":
+                self._performance_rating_fields.append(["No Rating", _dict[key]])
+            else:
+                self._performance_rating_fields.append([key, _dict[key]])
 
         ## make talent cordinate fields.
         self._talent_cordinate_fields = []
         _dict = self._your_org.groupby("2020 Talent Coordinate").groups
         for key in _dict:
-            self._talent_cordinate_fields.append([key, _dict[key]])
+            _key = key
+            if key == "Unspecified":
+                _key = "No Coordinate"
+            self._talent_cordinate_fields.append([_key, _dict[key]])
         
         ## make gender fields.
         self._gender_fields = []
@@ -703,7 +733,12 @@ class DemographicFileMaker:
         self._ethnicity_fields = []
         _dict = self._your_org.groupby("Ethnicity (US)").groups
         for key in _dict:
-            self._ethnicity_fields.append([key, _dict[key]])
+            if not key == "Non-US":
+                self._ethnicity_fields.append([key, _dict[key]])
+        try:
+            self._ethnicity_fields.append(["Non-US", _dict["Non-US"]])
+        except:
+            pass
 
         ## make age group fields.
         self._age_fields = []
@@ -729,6 +764,18 @@ class DemographicFileMaker:
         for key in _dict:
             self._office_fields.append([key, _dict[key]])
 
+        ## make Region fields.
+        self._region_fields = []
+        _dict = self._your_org.groupby("Location Level 2").groups
+        for key in _dict:
+            self._region_fields.append([key, _dict[key]])
+
+        ## make Department fields.
+        self._department_fields = []
+        _dict = self._your_org.groupby("Department Level 2").groups
+        for key in _dict:
+            self._department_fields.append([key, _dict[key]])
+
         self.index_match = {
             "": ["Gilead Overall", "Parent Group", "Your Org (2020)"],
             "Direct Reports (as of April 24, 2018)": sorted(self._get_names_from_field(self._direct_report_field)),
@@ -739,8 +786,10 @@ class DemographicFileMaker:
             "2019 Performance Rating": self._get_names_from_field(self._performance_rating_fields),
             "2020 Talent Coordinate": self._get_names_from_field(self._talent_cordinate_fields),
             "Gender": self._get_names_from_field(self._gender_fields),
-            "Ethnicity (US)": self._get_names_from_field(self._ethnicity_fields),
+            "Ethnicity (US)": sorted(self._get_names_from_field(self._ethnicity_fields)),
             "Age Group": self._get_names_from_field(self._age_fields),
+            "Department": self._get_names_from_field(self._department_fields),
+            "Regions": self._get_names_from_field(self._region_fields),
             "Country": self._get_names_from_field(self._country_fields),
             "Kite": self._get_names_from_field(self._kite_fields),
         }
@@ -828,6 +877,12 @@ class DemographicFileMaker:
 
         ## calculate office %s
         self._calculateSubFields(self._office_fields, "Office Type", item)
+
+        ## calculate regions %s
+        self._calculateSubFields(self._region_fields, "Regions", item)
+
+        ## calculate department %s
+        self._calculateSubFields(self._department_fields, "Department", item)
 
     def _calculateOverall(self, dataframe, item, history=False):
 
@@ -917,14 +972,15 @@ if __name__ == "__main__":
 
     ## Create a object.
     init_data = {
-        'leader': "List of Leaders and GMs 2021-01-26.xlsx",
-        'raw_data': "Qualtrics Survey Export Sample New.xlsx",
+        'leader': "List of Leaders and GMs 2021-02-05.xlsx",
+        'raw_data': "2020 Employee Survey Responses Sample 2021-02-05.xlsx",
         'item_code': "Item Code SHARE 2021-01-23.xlsx",
         'demographics': "2020 Demographics File Sample 2021-02-05.xlsx",
         'heatmap_color': "Heatmap Colors.xlsx",
-        'raw_data_past': "2018 Employee Survey Responses Sample 2021-01-23.xlsx",
+        'raw_data_past': "2018 Employee Survey Responses Sample 2021-02-05.xlsx",
         'demographics_past': "2018 Demographics File Sample 2021-02-05.xlsx",
         'benchmark': "External Benchmarks.xlsx",
+        'how to use': "How to Use Content 2021-02-13.xlsx",
         'output_folder': "./output",
         'input_folder': "./input",
         'image': "/image.png",
