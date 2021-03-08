@@ -9,6 +9,9 @@ from openpyxl.utils.units import points_to_pixels as f2p
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
 from openpyxl.utils.units import pixels_to_EMU as p2e
+from openpyxl.chart import BarChart, Series, Reference
+from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.chart.label import DataLabelList
 from tqdm import tqdm
 
 class DemographicFileMaker:
@@ -67,7 +70,7 @@ class DemographicFileMaker:
         self.benchmark_pd = pd.read_excel(self.input_source + "/" + self.benchmark_file, engine="openpyxl")
         self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
         self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
-        self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Lead")
+        self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Leader")
         # self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Demographic Trends How to Use")
         self.GM_levels = pd.read_excel(self.input_source + "/" + self.GM_levels_file, engine="openpyxl")
 
@@ -453,37 +456,6 @@ class DemographicFileMaker:
         
         sheet['A3'].alignment = sheet['A3'].alignment.copy(wrapText=True, vertical="bottom")
         sheet.add_image(img)
-    
-        # ## insert how to sheet.
-        # how_sheet = self.book.create_sheet("How to Use")
-        # how_font = Font(name="Arial", size=10)
-        # cell = how_sheet.cell(column=1, row=1)
-        # cell.value = self.how2use_pd.columns.values[0]
-        # cell.alignment = Alignment(wrapText=True)
-        # cell.font = how_font
-        # how_sheet.row_dimensions[1].height = int(len(self.how2use_pd.columns.values[0]) / 120 * (40 / 3))
-        
-
-        # for index in range(len(self.how2use_pd.index)):
-        #     _ = 0
-        #     for col_index in range(len(self.how2use_pd.columns)):
-        #         cell = how_sheet.cell(column=1 + col_index, row=2 + index)
-
-        #         content = self.how2use_pd.iloc[index, col_index]
-        #         if _ < len(content):
-        #             _ = len(content)
-        #         cell.value = content
-        #         cell.alignment = Alignment(wrapText=True)
-        #         cell.font = how_font
-        #         how_sheet.column_dimensions[ce.get_column_letter(col_index + 1)].width = 135
-
-        #     how_sheet.row_dimensions[index + 2].height = int(_ / 110 * (40 / 3))
-
-
-
-        # for row in range(1, 41 + len(self.how2use_pd.index)):
-        #     for col in range(1, 41 + len(self.how2use_pd.columns)):
-        #         how_sheet.cell(row=row, column=col).fill = white_back
 
     def _get_names_from_field(self, field_list):
 
@@ -1211,7 +1183,7 @@ class LTMaker:
         self.demographics_past_pd = pd.read_excel(self.input_source + "/" + self.demographics_past_file, engine="openpyxl")
         self.heatmap_color_pd = pd.read_excel(self.input_source + "/" + self.heatmap_color_file, engine="openpyxl")
         self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
-        self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Lead")
+        self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Leader")
         self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
         self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Score Details How to Use")
         self.GM_levels = pd.read_excel(self.input_source + "/" + self.GM_levels_file, engine="openpyxl")
@@ -2324,11 +2296,793 @@ class LTMaker:
         return str(hex(series["R"].values[0]))[2:] + str(hex(series["G"].values[0]))[2:] + str(hex(series["B"].values[0]))[2:]
 
 
+class SSM:
+
+    def __init__(self, **args):
+        ## initialize the object by specifying input and output files.
+        self.image_src = args['image']
+
+        self.raw_data_file = args['raw_data']
+        self.raw_data_past_file = args['raw_data_past']
+        self.item_code_file = args['item_code']
+        self.demographics_file = args['demographics']
+        self.demographics_past_file = args['demographics_past']
+        self.heatmap_color_file = args['heatmap_color']
+        self.benchmark_file = args['benchmark']
+        self.leader_file = args['leader']
+        self.output_source = args['output_folder']
+        self.input_source = args['input_folder']
+        self.how2use_file = args['how to use']
+
+        self.custom_text = args['custom text']
+
+        self.current_year = self.demographics_file[:4]
+        self.past_year = self.demographics_past_file[:4]
+
+    def readAllFiles(self):
+        ## read files and save it in object data.
+        self.origin_raw_data_pd = pd.read_excel(self.input_source + "/" + self.raw_data_file, engine="openpyxl")
+        self.origin_raw_data_past_pd = pd.read_excel(self.input_source + "/" + self.raw_data_past_file, engine="openpyxl")
+        self.item_code_pd = pd.read_excel(self.input_source + "/" + self.item_code_file, engine="openpyxl", sheet_name="ItemCodeSTAR")
+        self.origin_category_pd =  pd.read_excel(self.input_source + "/" + self.item_code_file, engine="openpyxl", sheet_name="CurrentCategorySTAR")
+        self.origin_demographics_pd = pd.read_excel(self.input_source + "/" + self.demographics_file, engine="openpyxl")
+        self.demographics_past_pd = pd.read_excel(self.input_source + "/" + self.demographics_past_file, engine="openpyxl")
+        self.heatmap_color_pd = pd.read_excel(self.input_source + "/" + self.heatmap_color_file, engine="openpyxl")
+        self.benchmark_pd = pd.read_excel(self.input_source + "/" + self.benchmark_file, engine="openpyxl")
+        self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
+        self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
+        self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Leader")
+        self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Score Summary How to Use")
+
+    def setLeader(self, id, GM=False, site_lead=False):
+        self._leader_id = id
+        self.GM = GM
+        self.site_lead = site_lead
+
+        # self._leader_id = 112372
+
+    def calculateValues(self):
+        ## do some process referred to individual leader ID.
+        self._preProcess()
+        self._prepareColumnsForID()
+
+        item_list = []
+        item_dict = {}
+        category_list = []
+
+        ## fill the above variables.
+        for key in self.order_category:
+            category_list.append(key)
+            item_list.append([0, key])
+            temp_list = []
+            for item in self.category_pd.iloc[self._group_dict[key], 0]:
+                item_list.append([1, item])
+                temp_list.append(item)
+            item_dict.update({key:temp_list})
+
+        self._item_list = item_list
+
+        ## do main calculation process by iterating over the category list.
+        for category in tqdm(category_list, desc="iterating over the list of category"):
+            sub_id_list = item_dict[category]
+
+            ## filter the source data frame to have columns belonged to each category.
+            self._filterResource(sub_id_list)
+
+            ## based on the filtered source, calculate the values for each row.
+            self._calculateEachRow(category)
+        
+
+        self._makeBenchColumn()
+
+    def makeReport(self):
+
+        ## prepare image.
+        img  = Image(self.input_source + "/" + self.image_src)
+        img.height = 90
+        img.width = 110
+
+        ## calculate total rows that will be placed in our output file.
+        total_rows = 6 + len(self._item_list)
+
+        ## make a workbook and sheet.
+        self.book = openpyxl.Workbook()
+        sheet = self.book.active
+        sheet.title = "Score Summary"
+
+        ## set styles like font, color, direction, border...
+        ft = Font(name="Arial", size=10)
+        ft_bold = Font(name="Arial", size=10, bold=True)
+        ft_size_bold = Font(name="Arial", size=11, bold=True)
+        ft_tiny = Font(name="Arial", size=8)
+        side = Side(style='thin', color="CCCCCC")
+        category_border = Border(
+                     top=side,
+                     bottom=side)
+        last_border = Border(bottom=side)
+        white_back = PatternFill("solid", fgColor="FFFFFF")
+        center_alignment = Alignment(horizontal='center', vertical="center")
+        right_alignment = Alignment(horizontal='right', vertical='center')
+
+        ## set empty cells white.
+        for row in range(1, total_rows + 40 + 1):
+            sheet.row_dimensions[row].height = 13
+            for col in range(1, 80):
+                cell = sheet.cell(row=row, column=col)
+                cell.fill = white_back
+                cell.alignment = center_alignment
+                cell.font = ft
+        
+        for col in range(1, 80):
+            sheet.column_dimensions[ce.get_column_letter(col)].width = 5.3
+
+        ## insert image.
+        sheet.row_dimensions[2].height = 20
+        size = XDRPositiveSize2D(p2e(80), p2e(60))
+        marker = AnchorMarker(col=4, colOff=p2e(0), row=0, rowOff=p2e(10))
+        img.anchor = OneCellAnchor(_from=marker, ext=size)
+
+        sheet.add_image(img)
+
+        ## fill fifth row.
+        _value = "Your Org"
+        if self.GM:
+            _value = self.GM
+        elif self.site_lead:
+            _value = self.site_lead.replace(" / ", " ")
+        if self.logic == 1:
+            _value = "Gilead Overall"
+        cell = sheet.cell(row=5, column=2)
+        cell.value = _value
+        cell.alignment = center_alignment
+        cell.font = ft_size_bold
+
+        sheet.merge_cells(start_row=5, start_column=4, end_row=5, end_column=6)
+        cell = sheet.cell(row=5, column=4)
+        cell.value = "Deltas*"
+        cell.font = ft_size_bold
+
+        ## fill sixth row.
+        _string = "n = " + f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + " ({}% participation)".format(round(self._participated / self._invited * 100))
+        sheet.cell(row=6, column=2).value = _string
+        sheet.cell(row=6, column=4).value = self.past_year
+        sheet.cell(row=6, column=5).value = "Ext"
+
+        _value = "Gilead"
+        if self.logic == 1:
+            _value = "Kite"
+        sheet.cell(row=6, column=6).value = _value
+
+        ## fill all data.
+        for index, (criteria, item) in enumerate(tqdm(self._item_list, desc="making contents...")):
+            ## fill the first column.
+            row_number = index + 7
+            cell = sheet.cell(row=row_number, column=1)
+            cell.alignment = right_alignment
+            cell.value = item
+            if criteria == 1:
+                cell.value = self._item_pd[self._item_pd["Item ID"] == item]["Short Text [2020 onward]"].values[0]
+                item = self._item_pd[self._item_pd["Item ID"] == item]["Unique Item Code"].values[0]
+
+            cell.font = ft
+            if index == len(self._item_list) - 1:
+                cell.border = last_border
+                sheet.cell(row=row_number, column=2).border = last_border
+
+            if criteria == 0:
+                cell.border = category_border
+                cell.font = ft_bold
+
+                sheet.cell(row=row_number, column=2).border = category_border
+            
+            ## fill the third group columns.
+            sub_index = 0
+            for key in self.left_dict:
+                cell = sheet.cell(row=row_number, column=4 + sub_index)
+                try:
+                    value = self.left_dict[key][item][0]
+                except:
+                    value = "N/A"
+                cell.value = value if value != "N/A" else "-"
+                cell.number_format = numbers.FORMAT_PERCENTAGE
+                cell.font = ft
+                cell.alignment = center_alignment
+
+                try:
+                    if value >= 0:
+                        cell.number_format = "+0%"
+                    elif value < 0 and value > -0.005:
+                        cell.number_format = "-0%"
+                except:
+                    pass
+
+                try:
+                    cell.fill = PatternFill("solid", fgColor=self._get_color(round(value * 100)))
+                except:
+                    ## this skip the case of N/A
+                    pass
+
+                if index == len(self._item_list) - 1:
+                    cell.border = last_border
+                if criteria == 0:
+                    cell.border = category_border
+                sub_index += 1
+                
+            ## fill the last group columns.
+            sub_index = 0
+            for key in self.right_dict:
+                cell = sheet.cell(row=row_number, column=37 + sub_index)
+                value = self.right_dict[key][item][0]
+                cell.value = value if value != "N/A" else "-"
+                cell.number_format = numbers.FORMAT_PERCENTAGE
+                cell.font = ft
+                cell.alignment = center_alignment
+
+                if index == len(self._item_list) - 1:
+                    cell.border = last_border
+                if criteria == 0:
+                    cell.border = category_border
+                sub_index += 1
+
+        ## set width and height of columns.
+        sheet.column_dimensions[ce.get_column_letter(1)].width = 40
+        sheet.column_dimensions[ce.get_column_letter(2)].width = 35
+        sheet.column_dimensions[ce.get_column_letter(3)].width = 1
+        # sheet.row_dimensions[6].height = 25
+
+        ## add chart bar.
+        _data = Reference(sheet, min_col=37, min_row=7, max_col=39, max_row=total_rows)
+        chart = BarChart()
+        chart.add_data(_data)
+        chart.height = 17.3
+        chart.width = 6.5
+        chart.type = "bar"
+        chart.gapWidth = 50.0
+        chart.grouping = "percentStacked"
+        chart.overlap = 100
+        chart.legend = None
+        chart.y_axis.majorGridlines = None
+        chart.x_axis.scaling.orientation = "maxMin"
+
+
+        s = chart.series[0]
+        s.graphicalProperties.line.solidFill = "7f9ba7"
+        s.graphicalProperties.solidFill = "7f9ba7"
+        s.dLbls = DataLabelList()
+        s.dLbls.showVal = True
+        s.dLbls.showCatName = False
+        s.dLbls.showLegendkey = False
+        s.dLbls.numFmt = "0%"
+
+        s = chart.series[1]
+        s.graphicalProperties.line.solidFill = "d8dada"
+        s.graphicalProperties.solidFill = "d8dada"
+
+        s = chart.series[2]
+        s.graphicalProperties.line.solidFill = "c2bfb5"
+        s.graphicalProperties.solidFill = "c2bfb5"  
+
+        sheet.add_chart(chart, "B6")
+
+        ## insert custom text
+        _texts = self.custom_text.split("\n")
+        for index, _text in enumerate(_texts):
+            cell = sheet.cell(row=46 + index, column=1)
+            cell.value = _text
+            cell.alignment = Alignment(shrinkToFit=False)
+            cell.font = ft_tiny
+
+
+        ## insert 'how to use' sheet
+        how_sheet = self.book.create_sheet("How to Use")
+        how_font = Font(name="Arial", size=10)
+        cell = how_sheet.cell(column=1, row=1)
+        cell.value = self.how2use_pd.columns.values[0]
+        cell.alignment = Alignment(wrapText=True, shrinkToFit=False, indent=0)
+        cell.font = how_font
+        how_sheet.row_dimensions[1].height = int(len(self.how2use_pd.columns.values[0]) / 120 * (40 / 3))
+        
+
+        for index in range(len(self.how2use_pd.index)):
+            _ = 0
+            for col_index in range(len(self.how2use_pd.columns)):
+                cell = how_sheet.cell(column=1 + col_index, row=2 + index)
+
+                content = self.how2use_pd.iloc[index, col_index]
+                if _ < len(content):
+                    _ = len(content)
+                cell.value = content
+                cell.alignment = Alignment(wrapText=True, shrinkToFit=False)
+                cell.font = how_font
+                how_sheet.column_dimensions[ce.get_column_letter(col_index + 1)].width = 135
+
+            how_sheet.row_dimensions[index + 2].height = int(_ / 110 * (40 / 3))
+
+
+
+        for row in range(1, 41 + len(self.how2use_pd.index)):
+            for col in range(1, 41 + len(self.how2use_pd.columns)):
+                how_sheet.cell(row=row, column=col).fill = white_back
+
+    def writeOutput(self):
+        ## specify the path of output file
+        if self.GM:
+            self.file_name = self.GM[:-4]
+            self.output_path = "/" + self.file_name
+        if self.site_lead:
+            self.file_name = self.site_lead.replace(" / ", " ")
+            self.output_path = "/" + self.file_name
+        path = self.output_source + self.output_path + "/" + "2021-04 Global Employee Survey - " + self.file_name + " - Score Summary.xlsx"
+
+        ## if the output file already exists, remove it.
+        if os.path.exists(path):
+            os.remove(path)
+
+        ## make a folder to involve the output file.
+        os.makedirs(self.output_source + self.output_path, exist_ok=True)
+
+        ## and write the output file.
+        self.book.save(path)
+
+    def _preProcess(self):
+        ## make a item group and filter the able source.
+        self._item_pd = self.item_code_pd[self.item_code_pd["Type ID"] == "T01"]
+
+        self._benchmark_item_pd = self._item_pd[self._item_pd["External Benchmark"] == "e"]
+        self._item_pd = self._item_pd[self._item_pd["External Benchmark"] == "i"]
+
+        self._rest_item_pd = self._item_pd[~self._item_pd["Unique Item Code"].isin(self.origin_raw_data_pd.columns.values)].reset_index(drop=True)
+        self._item_pd = self._item_pd[self._item_pd["Unique Item Code"].isin(self.origin_raw_data_pd.columns.values)].reset_index(drop=True)
+        self._rest_item_pd = self._rest_item_pd[self._rest_item_pd["Unique Item Code"].isin(self.origin_raw_data_past_pd.columns.values)].reset_index(drop=True)
+        self._both_item_pd = self._item_pd[self._item_pd["Unique Item Code"].isin(self.origin_raw_data_past_pd.columns.values)].reset_index(drop=True)
+
+        self.category_pd = self.origin_category_pd[self.origin_category_pd["Item ID in 2020 Survey"].isin(self._item_pd["Item ID"].tolist())]
+        self.category_pd = self.category_pd.drop_duplicates(subset=["Item ID in 2020 Survey"]).reset_index(drop=True)
+        self.order_category = self.category_pd.drop_duplicates(subset=["2020 Category"]).loc[:, "2020 Category"].tolist()
+
+        self._group_dict = self.category_pd.groupby(["2020 Category"]).groups
+
+        self.raw_data_pd = self.origin_raw_data_pd.iloc[2:].reset_index(drop=True)
+
+        ## filter the able source from history file.
+        self.raw_data_past_pd = self.origin_raw_data_past_pd.iloc[2:].reset_index(drop=True)
+
+        ## Convert numeric values into favorable, neutral, or not.
+        self.raw_data_n_pd = self.raw_data_pd.copy()
+        self.raw_data_uf_pd = self.raw_data_pd.copy()
+
+        for field in self._item_pd["Unique Item Code"]:
+            new_list = [[], [], []]
+            for item in self.raw_data_pd[field].tolist():
+                if item == 4 or item == 5:
+                    new_list[0].append(1)
+                    new_list[1].append(0)
+                    new_list[2].append(0)
+
+                elif item == 3:
+                    new_list[0].append(0)
+                    new_list[1].append(1)
+                    new_list[2].append(0)
+
+                elif item == 1 or item == 2:
+                    new_list[0].append(0)
+                    new_list[1].append(0)
+                    new_list[2].append(1)
+
+                else:
+                    new_list[0].append('')
+                    new_list[1].append('')
+                    new_list[2].append('')
+
+            self.raw_data_pd[field] = new_list[0]
+            self.raw_data_n_pd[field] = new_list[1]
+            self.raw_data_uf_pd[field] = new_list[2]
+
+            ## do the same process about history data.
+            try:
+                field = self._get_past_field_name_by_current_name(field)
+                new_list_past = []
+                for item in self.raw_data_past_pd[field].tolist():
+                    if item < 4 and item > 0:
+                        new_list_past.append(0)
+                    elif item >= 4 and item <= 5:
+                        new_list_past.append(1)
+                    else:
+                        new_list_past.append('')
+                self.raw_data_past_pd[field] = new_list_past
+            except:
+                pass
+
+        ## new feature -> process A/B pair.
+        pairs = self._item_pd[self._item_pd["AB Code"].isin(["A", "B"])].reset_index(drop=True)
+        pairs_dict = pairs.groupby(["Item ID"]).groups
+
+        for key in pairs_dict:
+
+            _list = pairs_dict[key]
+            pairs_row = pairs.iloc[_list, :]
+            item_list = pairs_row["Unique Item Code"].tolist()
+            text_list = pairs_row["Short Text [2020 onward]"].tolist()
+            new_text = "/".join(text_list)
+            self._item_pd = self._item_pd[~(self._item_pd["Unique Item Code"] == item_list[1])].reset_index(drop=True)
+            _index = self._item_pd[self._item_pd["Unique Item Code"] == item_list[0]].index
+            self._item_pd.loc[_index, "Short Text [2020 onward]"] = new_text
+
+            column_pair = self.raw_data_pd[item_list]
+            column_n_pair = self.raw_data_n_pd[item_list]
+            column_uf_pair = self.raw_data_uf_pd[item_list]
+
+            _list = []
+            for index in range(len(column_pair.index)):
+                _row = column_pair.iloc[index, :].tolist()
+                for val in _row:
+                    if type(val) == type(0):
+                        _list.append(val)
+                        break
+                else:
+                    _list.append('')
+
+            _pd = pd.DataFrame(_list, columns=[item_list[0]])
+            self.raw_data_pd = self.raw_data_pd.drop(columns=[item_list[1]])
+            self.raw_data_pd[item_list[0]] = _pd
+
+            _list = []
+            for index in range(len(column_n_pair.index)):
+                _row = column_n_pair.iloc[index, :].tolist()
+                for val in _row:
+                    if type(val) == type(0):
+                        _list.append(val)
+                        break
+                else:
+                    _list.append('')
+
+            _pd = pd.DataFrame(_list, columns=[item_list[0]])
+            self.raw_data_n_pd = self.raw_data_n_pd.drop(columns=[item_list[1]])
+            self.raw_data_n_pd[item_list[0]] = _pd
+
+            _list = []
+            for index in range(len(column_uf_pair.index)):
+                _row = column_uf_pair.iloc[index, :].tolist()
+                for val in _row:
+                    if type(val) == type(0):
+                        _list.append(val)
+                        break
+                else:
+                    _list.append('')
+
+            _pd = pd.DataFrame(_list, columns=[item_list[0]])
+            self.raw_data_uf_pd = self.raw_data_uf_pd.drop(columns=[item_list[1]])
+            self.raw_data_uf_pd[item_list[0]] = _pd
+
+        self.demographics_pd = self.origin_demographics_pd
+
+        ## convert the demographics data to include only answered entries.
+        self._invited_demographics_data = self.demographics_pd[self.demographics_pd["Invitee Flag"] == 1].reset_index(drop=True)
+        self._answered_demographics_data = self._invited_demographics_data[self._invited_demographics_data.loc[:, "Worker ID"].isin(self.raw_data_pd['ExternalReference'].tolist())].reset_index(drop=True)
+        self._gilead_org = self._answered_demographics_data
+
+        ## do the same process about history data.
+        self._invited_demographics_past_data = self.demographics_past_pd[self.demographics_past_pd["Invitee Flag"] == 1].reset_index(drop=True)
+        self._answered_demographics_past_data = self._invited_demographics_past_data[self._invited_demographics_past_data.loc[:, "Worker ID"].isin(self.raw_data_past_pd['ExternalReference'].tolist())].reset_index(drop=True)
+
+        if self.GM:
+            self._gm_demographics_data = self._answered_demographics_data[self._answered_demographics_data[self.GM] == 1].reset_index(drop=True)
+            self._gm_demographics_past_data = self._answered_demographics_past_data[self._answered_demographics_past_data[self.GM] == 1].reset_index(drop=True)
+
+        if self.site_lead:
+            self._site_demographics_data = self._answered_demographics_data[self._answered_demographics_data[self.site_lead] == 1].reset_index(drop=True)
+            self._site_demographics_past_data = self._answered_demographics_past_data[self._answered_demographics_past_data[self.site_lead] == 1].reset_index(drop=True)      
+
+        self.right_dict = {'f':{}, 'n':{}, 'uf':{}}
+        self.left_dict = {'d':{}, 'e':{}, 'f':{}}
+        self.benchmark_dict = {}
+        self.past_dict = {}
+
+    def _get_past_field_name_by_current_name(self, field_name):
+        _item_id = self._item_pd[self._item_pd["Unique Item Code"] == field_name]["Item ID"].values[0]
+        try:
+            new_field_name = self._rest_item_pd[self._rest_item_pd["Item ID"] == _item_id]["Unique Item Code"].values[0]
+        except:
+            new_field_name = None
+
+        if new_field_name == None:
+            try:
+                new_field_name = self._both_item_pd[self._both_item_pd["Unique Item Code"] == field_name]["Unique Item Code"].values[0]
+            except:
+                new_field_name = None
+
+        return new_field_name
+
+    def _get_benchmark_field_name_by_current_name(self, field_name):
+        _item_id = self._item_pd[self._item_pd["Unique Item Code"] == field_name]["Item ID"].values[0]
+        try:
+            field_name = self._benchmark_item_pd[self._benchmark_item_pd["Item ID"] == _item_id]["Unique Item Code"].values[0]
+        except:
+            field_name = None
+        
+        return field_name
+
+    def _prepareColumnsForID(self):
+        ## find the supervisor level of the given leader id.
+        self.first_row = {"current": {}, "past": {}}
+        _temp = "Supervisor Level {} ID"
+
+        leader_entry = self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == self._leader_id]
+
+        if self._leader_id == 999999:
+            self.logic = 1
+            leader_level = 1
+        else:
+            for index, level in enumerate(leader_entry.loc[:, _temp.format(2) : _temp.format(10)]):
+                if (leader_entry[level] == self._leader_id).tolist()[0]:
+                    leader_level = index + 2
+                    break
+
+        self.output_path = "/" + leader_entry["Worker Name"].values[0]
+        self.file_name = leader_entry["Worker Last Name"].values[0]
+
+        supervisor_level = leader_level - 1
+
+        if leader_level >= 3:
+            self.logic = 3
+            self._supervisor_id = leader_entry.loc[:, _temp.format(supervisor_level)].values[0]
+            _supervisor_entry = self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == self._supervisor_id]
+            self._supervisor_last_name = _supervisor_entry["Worker Last Name"].values[0]
+
+            ## get Parent group.
+            # self._parent_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(supervisor_level)] == self._supervisor_id].reset_index(drop=True)
+            # self._parent_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(supervisor_level)] == self._supervisor_id].reset_index(drop=True)
+
+        elif leader_level == 2:
+            self.logic = 2
+
+        ## get Your Org data
+        if self.logic == 1:
+            self._your_org = self._answered_demographics_data
+            self._invited = len(self._invited_demographics_data.index)
+            self._invited_past = len(self._invited_demographics_past_data.index)
+
+            self._kite = self._answered_demographics_data[self._answered_demographics_data["Kite Employee Flag"] == "Kite"].reset_index(drop=True)
+            self._no_kite = self._answered_demographics_data[self._answered_demographics_data["Kite Employee Flag"] == "Gilead (No Kite)"].reset_index(drop=True)
+        else:
+            if self.GM:
+                self._your_org = self._gm_demographics_data
+                self._invited = len(self._invited_demographics_data[self._invited_demographics_data[self.GM] == 1].index)
+                self._invited_past = len(self._invited_demographics_past_data[self._invited_demographics_past_data[self.GM] == 1].index)
+
+            elif self.site_lead:
+                self._your_org = self._site_demographics_data
+                self._invited = len(self._invited_demographics_data[self._invited_demographics_data[self.site_lead] == 1].index)
+
+            else:
+                self._your_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+                self._invited = len(self._invited_demographics_data[self._invited_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
+                self._invited_past = len(self._invited_demographics_past_data[self._invited_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
+
+        ## get your history group
+        if self.GM:
+            self._your_past_org = self._gm_demographics_past_data
+        elif self.site_lead:
+            self._your_past_org = self._site_demographics_past_data
+        else:
+            if self.logic == 1:
+                self._your_past_org = self._answered_demographics_past_data
+            else:
+                self._your_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+
+        ## calculate nums of participated
+        self._participated = len(self._your_org.loc[:, "Worker ID"])
+        self._participated_past = len(self._your_past_org.loc[:, "Worker ID"])
+
+    def _filterResource(self, id_list):
+
+        filter_item = self._item_pd[self._item_pd["Item ID"].isin(id_list)]["Unique Item Code"].tolist()
+
+        filter_item.insert(0, 'ExternalReference')
+        self._filtered_raw_data = self.raw_data_pd[filter_item]
+        self._filtered_raw_n_data = self.raw_data_n_pd[filter_item]
+        self._filtered_raw_uf_data = self.raw_data_uf_pd[filter_item]
+
+        ## about history data.
+        self._helper_past = False
+        filter_past_item = []
+        for index, item in enumerate(filter_item):
+            if index == 0:
+                filter_past_item.append(item)
+            else:
+                new_item = self._get_past_field_name_by_current_name(item)
+                if new_item != None:
+                    filter_past_item.append(new_item)
+                else:
+                    self._helper_past = True
+        
+        self._filtered_raw_past_data = self.raw_data_past_pd[filter_past_item]
+
+        ## about benchmark data.
+        self._helper_benchmark = False
+        filter_benchmark_item = []
+        for index, item in enumerate(filter_item):
+            if index == 0:
+                filter_benchmark_item.append(item)
+            else:
+                new_item = self._get_benchmark_field_name_by_current_name(item)
+                if new_item:
+                    filter_benchmark_item.append(new_item)
+                else:
+                    self._helper_benchmark = True
+        
+        self._filtered_benchmark_value = self.benchmark_pd[self.benchmark_pd["Unique Item Code"].isin(filter_benchmark_item)]
+
+    def _calculateEachRow(self, item):
+
+        ## calculate the right columns.
+        _dict, lens = self._calculateOverall(self._your_org, item)
+        self.right_dict['f'].update(_dict)
+
+        _dict, lens = self._calculateOverall(self._your_org, item, f=1)
+        self.right_dict['n'].update(_dict)
+
+        _dict, lens = self._calculateOverall(self._your_org, item, f=2)
+        self.right_dict['uf'].update(_dict)
+
+        ## calculate D %s
+        if len(self._filtered_raw_past_data.columns) > 1:
+            _dict, lens = self._calculateOverall(self._your_past_org, item, history=True)
+            # for key in _dict:
+            #     try:
+            #         _dict[key][0] = self.right_dict['f'][key][0] - _dict[key][0]
+            #     except:
+            #         _dict[key][0] = 'N/A'
+            # self.left_dict['d'].update(_dict)
+            self.past_dict.update(_dict)
+        
+        ## calculate E %s
+        if len(self._filtered_benchmark_value.columns) > 1:
+            _dict = {}
+            for index, row in self._filtered_benchmark_value.iterrows():
+                value = row["External - CAmp Biotechnology & Medical Devices 2019"]
+                _dict.update({row["Unique Item Code"]: [value, 1]})
+            _dict.update({item: ["N/A", 0]})
+            self.benchmark_dict.update(_dict)
+            
+
+        ## calculate F %s
+        if self.logic == 1:
+            _dict, lens = self._calculateOverall(self._kite, item)
+            __dict, lens = self._calculateOverall(self._no_kite, item)
+
+            for key in _dict:
+                try:
+                    _dict[key][0] = _dict[key][0] - __dict[key][0]
+                except:
+                    _dict[key][0] = "N/A"
+        else:
+            _dict, lens = self._calculateOverall(self._gilead_org, item)
+            for key in _dict:
+                try:
+                    _dict[key][0] = self.right_dict['f'][key][0] - _dict[key][0]
+                except:
+                    _dict[key][0] = 'N/A'
+        self.left_dict['f'].update(_dict)            
+
+
+    def _calculateOverall(self, dataframe, item, history=False, f=0):
+
+        ## calcualte overall fields.
+        ids = dataframe.iloc[:, 0]
+        if history:
+            working_pd = self._filtered_raw_past_data[self._filtered_raw_past_data["ExternalReference"].isin(ids)].reset_index(drop=True)
+        else:
+            if f == 0:
+                working_pd = self._filtered_raw_data[self._filtered_raw_data["ExternalReference"].isin(ids)].reset_index(drop=True)
+            elif f == 1:
+                working_pd = self._filtered_raw_n_data[self._filtered_raw_n_data["ExternalReference"].isin(ids)].reset_index(drop=True)
+            elif f == 2:
+                working_pd = self._filtered_raw_uf_data[self._filtered_raw_uf_data["ExternalReference"].isin(ids)].reset_index(drop=True)
+
+        nums = len(working_pd.iloc[:, 0])
+        return self._get_sum(working_pd.iloc[:, 1:], nums, item, history), len(ids)
+
+    def _get_sum(self, data, nums, item, implicity=False):
+
+        ## calculate the sum of favorable scores.
+        _dict = {}
+        determine_parent_na = False
+
+        for ind in range(len(data.columns)):
+            _ = data.iloc[:, ind]
+            is_empty_column = True
+            lens = nums
+            sub = 0
+            count_valid = 0
+            for __ in _:
+                if __ != '':
+                    is_empty_column = False
+                    sub += __
+                    count_valid += 1
+                else:
+                    lens -= 1
+            if is_empty_column:
+                _dict.update({data.columns.values[ind]: ["N/A", 1]})
+                determine_parent_na = True
+            else:
+                if count_valid >= 4:
+                    _dict.update({data.columns.values[ind]: [sub / lens, 1]})
+                else:
+                    _dict.update({data.columns.values[ind]: ["N/A", 1]})
+                    determine_parent_na = True
+        
+        if determine_parent_na:
+            _dict.update({item: ["N/A", 0]})
+        else:
+            total_lens = nums
+            total = 0
+            cols = len(data.columns)
+            for ind in range(nums):
+                _series = data.iloc[ind, :]
+                sub_sum = 0
+                _is_nan = False
+                for val in _series:
+                    if val != '':
+                        sub_sum += val
+                    else:
+                        _is_nan = True
+                        total_lens -= 1
+                        break
+
+                if not _is_nan:
+                    total += sub_sum / cols
+
+            if total_lens < 4:
+                _dict.update({item: ["N/A", 0]})
+            else:
+                _dict.update({item: [total / total_lens, 0]})
+
+        if implicity:
+                _dict.update({item: ["N/A", 0]})
+        return _dict
+
+    def _makeBenchColumn(self):
+        for criteria, item in self._item_list:
+            origin_item = item
+            if criteria == 1:
+                origin_item = self._item_pd[self._item_pd["Item ID"] == item]["Unique Item Code"].values[0]
+                item = self._get_benchmark_field_name_by_current_name(origin_item)
+            _ = ["N/A", 1 if criteria else 0]
+            try:
+                _ = self.benchmark_dict[item]
+                if _[0] != "N/A":
+                    _[0] = self.right_dict['f'][origin_item][0] - _[0]
+            except:
+                _ = ["N/A", 1 if criteria else 0]
+            self.left_dict['e'].update({origin_item: _})
+
+        for criteria, item in self._item_list:
+            origin_item = item
+            if criteria == 1:
+                origin_item = self._item_pd[self._item_pd["Item ID"] == item]["Unique Item Code"].values[0]
+                item = self._get_past_field_name_by_current_name(origin_item)
+            _ = ["N/A", 1 if criteria else 0]
+            try:
+                _ = self.past_dict[item]
+                if _[0] != "N/A":
+                    _[0] = self.right_dict['f'][origin_item][0] - _[0]
+            except:
+                _ = ["N/A", 1 if criteria else 0]
+            self.left_dict['d'].update({origin_item: _})
+
+
+    def _get_color(self, delta):
+        if abs(delta) > 25:
+            delta = delta // abs(delta) * 25
+        series = self.heatmap_color_pd[self.heatmap_color_pd["Delta"] == delta]
+        return str(hex(series["R"].values[0]))[2:] + str(hex(series["G"].values[0]))[2:] + str(hex(series["B"].values[0]))[2:]
+
 if __name__ == "__main__":
 
     ## Create a object.
     init_data = {
-        'leader': "List of Leaders and GMs 2021-02-17.xlsx",
+        'leader': "List of Leaders and GMs 2021-02-28.xlsx",
         'raw_data': "2020 Employee Survey Responses Sample 2021-02-05.xlsx",
         'item_code': "Item Code SHARE 2021-01-23.xlsx",
         'demographics': "2020 Demographics File Sample 2021-02-17.xlsx",
@@ -2351,16 +3105,31 @@ if __name__ == "__main__":
     ## set GM_region_human_parentorg = 0.
     # ltm.setGMParentFlag(1)
 
+    ## custom text for score summary file.
+    init_data.update(
+        {
+            'custom text': """
+            * 2018 indicates 2018 Gilead Employee Survey results (negative indicates less favorable in 2020)
+            Ext indicates vendor biotechnology & medical device benchmark across companies and geographies
+            Gilead column compares {your org/GM org/site name}'s scores to Gilead Overall (negative indicates {your org/GM org/site name} less favorable)
+            """
+        }
+    )
+    ssm = SSM(**init_data)
+
+
     ## read all needed files.
     dfm.readAllFiles()
     ltm.readAllFiles()
+    ssm.readAllFiles()
 
     total_ids = len(dfm.leaders.index) + len(dfm.GMs.index) + len(dfm.site_leads.index)
 
-    for index in tqdm(range(min(total_ids, 1)), desc="details process"):
+    for index in tqdm(range(min(total_ids, 1)), desc="total process"):
         if index < len(dfm.leaders.index):
             dfm.setLeader(dfm.leaders.iloc[index, :].values[0])
             ltm.setLeader(ltm.leaders.iloc[index, :].values[0])
+            ssm.setLeader(ssm.leaders.iloc[index, :].values[0])
 
         elif index < len(dfm.leaders.index) + len(dfm.GMs.index):
             row = dfm.GMs.iloc[index - len(dfm.leaders.index), :]
@@ -2368,12 +3137,19 @@ if __name__ == "__main__":
 
             row = ltm.GMs.iloc[index - len(ltm.leaders.index), :]
             ltm.setLeader(row["GM ID"], row["GM Org"])
+
+            row = ssm.GMs.iloc[index - len(ssm.leaders.index), :]
+            ssm.setLeader(row["GM ID"], row["GM Org"])
+
         else:
             row = dfm.site_leads.iloc[index - len(dfm.leaders.index) - len(dfm.GMs.index), :]
-            dfm.setLeader(row["Site Lead ID"], False, row["Site Name"])
+            dfm.setLeader(row["Site Leader ID"], False, row["Site Name"])
 
             row = ltm.site_leads.iloc[index - len(ltm.leaders.index) - len(ltm.GMs.index), :]
-            ltm.setLeader(row["Site Lead ID"], False, row["Site Name"])
+            ltm.setLeader(row["Site Leader ID"], False, row["Site Name"])
+
+            row = ssm.site_leads.iloc[index - len(ssm.leaders.index) - len(ssm.GMs.index), :]
+            ssm.setLeader(row["Site Leader ID"], False, row["Site Name"])
     
         ## do main process to calculate report.
         dfm.calculateValues()
@@ -2391,85 +3167,10 @@ if __name__ == "__main__":
         ltm.makeReport()
 
         ltm.writeOutput()
-    print("complete details!")
 
+        ssm.calculateValues()
 
-# if __name__ == "__main__":
+        ssm.makeReport()
 
-#     ## Create a object.
-#     init_data = {
-#         'leader': "List of Leaders and GMs 2021-02-17.xlsx",
-#         'raw_data': "2020 Employee Survey Responses Sample 2021-02-05.xlsx",
-#         'item_code': "Item Code SHARE 2021-01-23.xlsx",
-#         'demographics': "2020 Demographics File Sample 2021-02-17.xlsx",
-#         'heatmap_color': "Heatmap Colors.xlsx",
-#         'raw_data_past': "2018 Employee Survey Responses Sample 2021-02-05.xlsx",
-#         'demographics_past': "2018 Demographics File Sample 2021-02-17.xlsx",
-#         'benchmark': "External Benchmarks.xlsx",
-#         'how to use': "How to Use Content 2021-02-13.xlsx",
-#         'gm_levels': "GM Levels 2021-02-17.xlsx",
-#         'output_folder': "./output",
-#         'input_folder': "./input",
-#         'image': "image.png",
-#     }
-
-#     dfm = DemographicFileMaker(**init_data)
-
-#     ## you can change GM_region_human_parentorg here.
-#     # dfm.setGMParentFlag(0)
-
-#     ## read all needed files.
-#     dfm.readAllFiles()
-
-#     total_ids = len(dfm.leaders.index) + len(dfm.GMs.index) + len(dfm.site_leads.index)
-
-#     for index in tqdm(range(min(total_ids, 1000)), desc="DFM process"):
-#         if index < len(dfm.leaders.index):
-#             dfm.setLeader(dfm.leaders.iloc[index, :].values[0])
-#         elif index < len(dfm.leaders.index) + len(dfm.GMs.index):
-#             row = dfm.GMs.iloc[index - len(dfm.leaders.index), :]
-#             dfm.setLeader(row["GM ID"], row["GM Org"])
-#         else:
-#             row = dfm.site_leads.iloc[index - len(dfm.leaders.index) - len(dfm.GMs.index), :]
-#             dfm.setLeader(row["Site Lead ID"], False, row["Site Name"])
-    
-#         ## do main process to calculate report.
-#         dfm.calculateValues()
-
-#         ## make report dataframe to output.
-#         dfm.makeReport()
-
-#         ## write output file (Mockup STAR.xlsx)
-#         dfm.writeOutput()
-#     print("complete DFM!")
-
-
-#     ltm = LTMaker(**init_data)
-
-#     ## set GM_region_human_parentorg = 0.
-#     # ltm.setGMParentFlag(1)
-
-#     ltm.readAllFiles()
-
-#     total_ids = len(ltm.leaders.index) + len(ltm.GMs.index) + len(ltm.site_leads.index)
-
-#     for index in tqdm(range(total_ids), desc="LTM process"):
-#         if index < len(ltm.leaders.index):
-#             ltm.setLeader(ltm.leaders.iloc[index, :].values[0])
-#         elif index < len(ltm.leaders.index) + len(ltm.GMs.index):
-#             row = ltm.GMs.iloc[index - len(ltm.leaders.index), :]
-#             ltm.setLeader(row["GM ID"], row["GM Org"])
-#         else:
-#             row = ltm.site_leads.iloc[index - len(ltm.leaders.index) - len(ltm.GMs.index), :]
-#             ltm.setLeader(row["Site Lead ID"], False, row["Site Name"])
-        
-#         ## do main process to calculate report.
-#         ltm.calculateValues()
-
-#         ## make report dataframe to output.
-#         ltm.makeReport()
-
-#         ## write output file (Mockup STAR.xlsx)
-#         ltm.writeOutput()
-
-#     print("complete LTM!")
+        ssm.writeOutput()
+    print("complete!")
