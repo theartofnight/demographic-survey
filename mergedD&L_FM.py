@@ -68,7 +68,7 @@ class DemographicFileMaker:
         self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
         self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
         self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Lead")
-        self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Demographic Trends How to Use")
+        # self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Demographic Trends How to Use")
         self.GM_levels = pd.read_excel(self.input_source + "/" + self.GM_levels_file, engine="openpyxl")
 
     def calculateValues(self):
@@ -124,6 +124,9 @@ class DemographicFileMaker:
 
         ## and write the output file.
         self.book.save(path)
+
+    def getWorkBook(self):
+        return self.book
 
     def makeReport(self):
 
@@ -232,7 +235,10 @@ class DemographicFileMaker:
                     cell.alignment = cell.alignment.copy(horizontal="left")
 
                     ## set value to cell.
-                    cell.value = item[0]
+                    try:
+                        cell.value = round(item[0], 2)
+                    except:
+                        cell.value = item[0]
 
                 ## autofit the first column's width.
                 _ = 0
@@ -322,7 +328,7 @@ class DemographicFileMaker:
         
         ## below method is used to calculate delta.
         def get_delta(first, second):
-            return round(second * 100) - round(first * 100)
+            return round(second * 100 - first * 100)
 
         gilead_org = frames[0]
 
@@ -353,7 +359,10 @@ class DemographicFileMaker:
                     cell.fill = grey_back
                 
                 ## set value to cell.
-                cell.value = item[0]
+                try:
+                    cell.value = round(item[0], 2)
+                except:
+                    cell.value = item[0]
 
                 ## make "N/A" cell lightgrey.
                 if row_index >= 1:
@@ -445,35 +454,36 @@ class DemographicFileMaker:
         sheet['A3'].alignment = sheet['A3'].alignment.copy(wrapText=True, vertical="bottom")
         sheet.add_image(img)
     
-        how_sheet = self.book.create_sheet("How to Use")
-        how_font = Font(name="Arial", size=10)
-        cell = how_sheet.cell(column=1, row=1)
-        cell.value = self.how2use_pd.columns.values[0]
-        cell.alignment = Alignment(wrapText=True)
-        cell.font = how_font
-        how_sheet.row_dimensions[1].height = int(len(self.how2use_pd.columns.values[0]) / 120 * (40 / 3))
+        # ## insert how to sheet.
+        # how_sheet = self.book.create_sheet("How to Use")
+        # how_font = Font(name="Arial", size=10)
+        # cell = how_sheet.cell(column=1, row=1)
+        # cell.value = self.how2use_pd.columns.values[0]
+        # cell.alignment = Alignment(wrapText=True)
+        # cell.font = how_font
+        # how_sheet.row_dimensions[1].height = int(len(self.how2use_pd.columns.values[0]) / 120 * (40 / 3))
         
 
-        for index in range(len(self.how2use_pd.index)):
-            _ = 0
-            for col_index in range(len(self.how2use_pd.columns)):
-                cell = how_sheet.cell(column=1 + col_index, row=2 + index)
+        # for index in range(len(self.how2use_pd.index)):
+        #     _ = 0
+        #     for col_index in range(len(self.how2use_pd.columns)):
+        #         cell = how_sheet.cell(column=1 + col_index, row=2 + index)
 
-                content = self.how2use_pd.iloc[index, col_index]
-                if _ < len(content):
-                    _ = len(content)
-                cell.value = content
-                cell.alignment = Alignment(wrapText=True)
-                cell.font = how_font
-                how_sheet.column_dimensions[ce.get_column_letter(col_index + 1)].width = 135
+        #         content = self.how2use_pd.iloc[index, col_index]
+        #         if _ < len(content):
+        #             _ = len(content)
+        #         cell.value = content
+        #         cell.alignment = Alignment(wrapText=True)
+        #         cell.font = how_font
+        #         how_sheet.column_dimensions[ce.get_column_letter(col_index + 1)].width = 135
 
-            how_sheet.row_dimensions[index + 2].height = int(_ / 110 * (40 / 3))
+        #     how_sheet.row_dimensions[index + 2].height = int(_ / 110 * (40 / 3))
 
 
 
-        for row in range(1, 41 + len(self.how2use_pd.index)):
-            for col in range(1, 41 + len(self.how2use_pd.columns)):
-                how_sheet.cell(row=row, column=col).fill = white_back
+        # for row in range(1, 41 + len(self.how2use_pd.index)):
+        #     for col in range(1, 41 + len(self.how2use_pd.columns)):
+        #         how_sheet.cell(row=row, column=col).fill = white_back
 
     def _get_names_from_field(self, field_list):
 
@@ -857,6 +867,18 @@ class DemographicFileMaker:
         for key in _dict:
             self._department_fields.append([key, _dict[key]])
 
+        ## make Gender x Ethnicity (US) fields.
+        self._gender_ethnicity_fields = []
+        _dict = self._your_org.groupby(["Ethnicity (US)", "Gender"]).groups
+        _new_dict = copy.deepcopy(_dict)
+        for key in _dict:
+            _temp = _new_dict.pop(key)
+            if key[0] != "Non-US":
+                _new_key = "{} {}".format(key[0], key[1])
+                _new_dict.update({_new_key: _temp})
+        for key in _new_dict:
+            self._gender_ethnicity_fields.append([key, _new_dict[key]])
+
         ## make affiliate fields.
         if self.use_affiliate:
             self._affiliate_fields = []
@@ -941,6 +963,7 @@ class DemographicFileMaker:
             "2020 Talent Coordinate": self._get_names_from_field(self._talent_cordinate_fields),
             "Gender": self._get_names_from_field(self._gender_fields),
             "Ethnicity (US)": sorted(self._get_names_from_field(self._ethnicity_fields)),
+            "Gender x Ethnicity (US)": self._get_names_from_field(self._gender_ethnicity_fields),
             "Age Group": self._get_names_from_field(self._age_fields),
             "Department": self._get_names_from_field(self._department_fields),
             "Region": self._get_names_from_field(self._region_fields),
@@ -1010,7 +1033,7 @@ class DemographicFileMaker:
                 if not value:
                     _dict.update({row["Unique Item Code"]: [value, 1]})
                 else:
-                    _dict.update({row["Unique Item Code"]: [round(value, 2), 1]})
+                    _dict.update({row["Unique Item Code"]: [value, 1]})
             _dict.update({item: ["N/A", 0]})
             self.precious_dict["delta"]["Δ External"].update(_dict)
 
@@ -1058,6 +1081,9 @@ class DemographicFileMaker:
         ## calculate affiliate %s
         if self.use_affiliate:
             self._calculateSubFields(self._affiliate_fields, "Affiliate", item)
+
+        ## calculate gender ethnicity %s
+        self._calculateSubFields(self._gender_ethnicity_fields, "Gender x Ethnicity (US)", item)
 
     def _calculateOverall(self, dataframe, item, history=False):
 
@@ -1108,7 +1134,7 @@ class DemographicFileMaker:
                 determine_parent_na = True
             else:
                 if count_valid >= 4:
-                    _dict.update({data.columns.values[ind]: [round(sub / lens, 2), 1]})
+                    _dict.update({data.columns.values[ind]: [sub / lens, 1]})
                 else:
                     _dict.update({data.columns.values[ind]: ["N/A", 1]})
                     determine_parent_na = True
@@ -1137,7 +1163,7 @@ class DemographicFileMaker:
             if total_lens < 4:
                 _dict.update({item: ["N/A", 0]})
             else:
-                _dict.update({item: [round(total / total_lens, 2), 0]})
+                _dict.update({item: [total / total_lens, 0]})
 
         if implicity:
                 _dict.update({item: ["N/A", 0]})
@@ -1187,7 +1213,7 @@ class LTMaker:
         self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
         self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Lead")
         self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
-        self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Longitudinal Trends How to Use")
+        self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Score Details How to Use")
         self.GM_levels = pd.read_excel(self.input_source + "/" + self.GM_levels_file, engine="openpyxl")
 
     def setLeader(self, id, GM=False, site_lead=False):
@@ -1231,6 +1257,9 @@ class LTMaker:
             ## based on the filtered source, calculate the values for each row.
             self._calculateEachRow(category)
 
+    def setWorkBook(self, book):
+        self.book = book
+
     def makeReport(self):
 
         ## eliminate columns of which respondents are lower than 4.
@@ -1260,9 +1289,9 @@ class LTMaker:
         total_rows = 5 + len(self._item_list)
 
         ## make a workbook and sheet.
-        self.book = openpyxl.Workbook()
-        sheet = self.book.active
-        sheet.title = self.current_year + "vs." + self.past_year + " Longitudinal Trends"
+        # self.book = openpyxl.Workbook()
+        sheet = self.book.create_sheet(self.current_year + "vs." + self.past_year + " Longitudinal Trends")
+        # sheet.title = self.current_year + "vs." + self.past_year + " Longitudinal Trends"
 
         ## set styles like font, color, direction, border...
         ft = Font(name="Arial", size=8)
@@ -1339,7 +1368,10 @@ class LTMaker:
                     cell.alignment = cell.alignment.copy(horizontal="left")
 
                     ## set value to cell.
-                    cell.value = item[0]
+                    try:
+                        cell.value = round(item[0], 2)
+                    except:
+                        cell.value = item[0]
                 
                 ## autofit the first column's width.
                 _ = 0
@@ -1426,7 +1458,10 @@ class LTMaker:
                     cell.font = ft
                     
                     ## set value to cell.
-                    cell.value = item[0]
+                    try:
+                        cell.value = round(item[0], 2)
+                    except:
+                        cell.value = item[0]
 
                 cell.alignment = right_alignment
 
@@ -1491,6 +1526,7 @@ class LTMaker:
         sheet['A3'].alignment = sheet['A3'].alignment.copy(wrapText=True, vertical="bottom")
         # sheet.add_image(img)
 
+        ## insert how to use sheet.
         how_sheet = self.book.create_sheet("How to Use")
         how_font = Font(name="Arial", size=10)
         cell = how_sheet.cell(column=1, row=1)
@@ -1529,7 +1565,8 @@ class LTMaker:
         if self.site_lead:
             self.file_name = self.site_lead.replace(" / ", " ")
             self.output_path = "/" + self.file_name
-        path = self.output_source + self.output_path + "/" + "2021-04 Global Employee Survey - " + self.file_name + " - Longitudinal Trends.xlsx"
+        # path = self.output_source + self.output_path + "/" + "2021-04 Global Employee Survey - " + self.file_name + " - Longitudinal Trends.xlsx"
+        path = self.output_source + self.output_path + "/" + "2021-04 Global Employee Survey - " + self.file_name + " - Score Details.xlsx"
 
         ## if the output file already exists, remove it.
         if os.path.exists(path):
@@ -1943,6 +1980,30 @@ class LTMaker:
         for key in _dict:
             self._department_past_fields.update({key: _dict[key]})
 
+        ## make Gender x Ethnicity (US) fields.
+        self._gender_ethnicity_fields = []
+        _dict = self._your_org.groupby(["Ethnicity (US)", "Gender"]).groups
+        _new_dict = copy.deepcopy(_dict)
+        for key in _dict:
+            _temp = _new_dict.pop(key)
+            if key[0] != "Non-US":
+                _new_key = "{} {}".format(key[0], key[1])
+                _new_dict.update({_new_key: _temp})
+        for key in _new_dict:
+            self._gender_ethnicity_fields.append([key, _new_dict[key]])
+
+        self._gender_ethnicity_past_fields = {}
+        _dict = self._your_past_org.groupby(["Ethnicity (US)", "Gender"]).groups
+        _new_dict = copy.deepcopy(_dict)
+        for key in _dict:
+            _temp = _new_dict.pop(key)
+            if key[0] != "Non-US":
+                _new_key = "{} {}".format(key[0], key[1])
+                _new_dict.update({_new_key: _temp})
+        for key in _new_dict:
+            self._gender_ethnicity_past_fields.update({key: _new_dict[key]})
+
+
         ## make affiliate fields.
         if self.use_affiliate:
             self._affiliate_fields = []
@@ -2037,6 +2098,7 @@ class LTMaker:
             "Talent Coordinate": self._get_names_from_field(self._talent_cordinate_fields),
             "Gender": self._get_names_from_field(self._gender_fields),
             "Ethnicity (US)": self._get_names_from_field(self._ethnicity_fields),
+            "Gender x Ethnicity (US)": self._get_names_from_field(self._gender_ethnicity_fields),
             "Age Group": self._get_names_from_field(self._age_fields),
             "Department": self._get_names_from_field(self._department_fields),
             "Region": self._get_names_from_field(self._region_fields),
@@ -2167,6 +2229,9 @@ class LTMaker:
         if self.use_affiliate:
             self._calculateSubFields(self._affiliate_fields, self._affiliate_past_fields, "Affiliate", item)
 
+        ## calculate gender ethnicity %s
+        self._calculateSubFields(self._gender_ethnicity_fields, self._gender_ethnicity_past_fields, "Gender x Ethnicity (US)", item)
+
     def _calculateOverall(self, current_f, past_f, item):
         
         ## calcualte overall fields.
@@ -2211,7 +2276,7 @@ class LTMaker:
                 _dict.update({data.columns.values[ind]: ["N/A", 1]})
             else:
                 if count_valid >= 4:
-                    _dict.update({data.columns.values[ind]: [round(sub / lens, 2), 1]})
+                    _dict.update({data.columns.values[ind]: [sub / lens, 1]})
                 else:
                     _dict.update({data.columns.values[ind]: ["N/A", 1]})
         
@@ -2271,7 +2336,7 @@ if __name__ == "__main__":
         'raw_data_past': "2018 Employee Survey Responses Sample 2021-02-05.xlsx",
         'demographics_past': "2018 Demographics File Sample 2021-02-17.xlsx",
         'benchmark': "External Benchmarks.xlsx",
-        'how to use': "How to Use Content 2021-02-13.xlsx",
+        'how to use': "How to Use Content 2021-02-28.xlsx",
         'gm_levels': "GM Levels 2021-02-17.xlsx",
         'output_folder': "./output",
         'input_folder': "./input",
@@ -2279,24 +2344,36 @@ if __name__ == "__main__":
     }
 
     dfm = DemographicFileMaker(**init_data)
-
     ## you can change GM_region_human_parentorg here.
     # dfm.setGMParentFlag(0)
 
+    ltm = LTMaker(**init_data)
+    ## set GM_region_human_parentorg = 0.
+    # ltm.setGMParentFlag(1)
+
     ## read all needed files.
     dfm.readAllFiles()
+    ltm.readAllFiles()
 
     total_ids = len(dfm.leaders.index) + len(dfm.GMs.index) + len(dfm.site_leads.index)
 
-    for index in tqdm(range(min(total_ids, 1000)), desc="DFM process"):
+    for index in tqdm(range(min(total_ids, 1)), desc="details process"):
         if index < len(dfm.leaders.index):
             dfm.setLeader(dfm.leaders.iloc[index, :].values[0])
+            ltm.setLeader(ltm.leaders.iloc[index, :].values[0])
+
         elif index < len(dfm.leaders.index) + len(dfm.GMs.index):
             row = dfm.GMs.iloc[index - len(dfm.leaders.index), :]
             dfm.setLeader(row["GM ID"], row["GM Org"])
+
+            row = ltm.GMs.iloc[index - len(ltm.leaders.index), :]
+            ltm.setLeader(row["GM ID"], row["GM Org"])
         else:
             row = dfm.site_leads.iloc[index - len(dfm.leaders.index) - len(dfm.GMs.index), :]
             dfm.setLeader(row["Site Lead ID"], False, row["Site Name"])
+
+            row = ltm.site_leads.iloc[index - len(ltm.leaders.index) - len(ltm.GMs.index), :]
+            ltm.setLeader(row["Site Lead ID"], False, row["Site Name"])
     
         ## do main process to calculate report.
         dfm.calculateValues()
@@ -2305,36 +2382,94 @@ if __name__ == "__main__":
         dfm.makeReport()
 
         ## write output file (Mockup STAR.xlsx)
-        dfm.writeOutput()
-    print("complete DFM!")
+        book = dfm.getWorkBook()
 
+        ltm.setWorkBook(book)
 
-    ltm = LTMaker(**init_data)
-
-    ## set GM_region_human_parentorg = 0.
-    # ltm.setGMParentFlag(1)
-
-    ltm.readAllFiles()
-
-    total_ids = len(ltm.leaders.index) + len(ltm.GMs.index) + len(ltm.site_leads.index)
-
-    for index in tqdm(range(total_ids), desc="LTM process"):
-        if index < len(ltm.leaders.index):
-            ltm.setLeader(ltm.leaders.iloc[index, :].values[0])
-        elif index < len(ltm.leaders.index) + len(ltm.GMs.index):
-            row = ltm.GMs.iloc[index - len(ltm.leaders.index), :]
-            ltm.setLeader(row["GM ID"], row["GM Org"])
-        else:
-            row = ltm.site_leads.iloc[index - len(ltm.leaders.index) - len(ltm.GMs.index), :]
-            ltm.setLeader(row["Site Lead ID"], False, row["Site Name"])
-        
-        ## do main process to calculate report.
         ltm.calculateValues()
 
-        ## make report dataframe to output.
         ltm.makeReport()
 
-        ## write output file (Mockup STAR.xlsx)
         ltm.writeOutput()
+    print("complete details!")
 
-    print("complete LTM!")
+
+# if __name__ == "__main__":
+
+#     ## Create a object.
+#     init_data = {
+#         'leader': "List of Leaders and GMs 2021-02-17.xlsx",
+#         'raw_data': "2020 Employee Survey Responses Sample 2021-02-05.xlsx",
+#         'item_code': "Item Code SHARE 2021-01-23.xlsx",
+#         'demographics': "2020 Demographics File Sample 2021-02-17.xlsx",
+#         'heatmap_color': "Heatmap Colors.xlsx",
+#         'raw_data_past': "2018 Employee Survey Responses Sample 2021-02-05.xlsx",
+#         'demographics_past': "2018 Demographics File Sample 2021-02-17.xlsx",
+#         'benchmark': "External Benchmarks.xlsx",
+#         'how to use': "How to Use Content 2021-02-13.xlsx",
+#         'gm_levels': "GM Levels 2021-02-17.xlsx",
+#         'output_folder': "./output",
+#         'input_folder': "./input",
+#         'image': "image.png",
+#     }
+
+#     dfm = DemographicFileMaker(**init_data)
+
+#     ## you can change GM_region_human_parentorg here.
+#     # dfm.setGMParentFlag(0)
+
+#     ## read all needed files.
+#     dfm.readAllFiles()
+
+#     total_ids = len(dfm.leaders.index) + len(dfm.GMs.index) + len(dfm.site_leads.index)
+
+#     for index in tqdm(range(min(total_ids, 1000)), desc="DFM process"):
+#         if index < len(dfm.leaders.index):
+#             dfm.setLeader(dfm.leaders.iloc[index, :].values[0])
+#         elif index < len(dfm.leaders.index) + len(dfm.GMs.index):
+#             row = dfm.GMs.iloc[index - len(dfm.leaders.index), :]
+#             dfm.setLeader(row["GM ID"], row["GM Org"])
+#         else:
+#             row = dfm.site_leads.iloc[index - len(dfm.leaders.index) - len(dfm.GMs.index), :]
+#             dfm.setLeader(row["Site Lead ID"], False, row["Site Name"])
+    
+#         ## do main process to calculate report.
+#         dfm.calculateValues()
+
+#         ## make report dataframe to output.
+#         dfm.makeReport()
+
+#         ## write output file (Mockup STAR.xlsx)
+#         dfm.writeOutput()
+#     print("complete DFM!")
+
+
+#     ltm = LTMaker(**init_data)
+
+#     ## set GM_region_human_parentorg = 0.
+#     # ltm.setGMParentFlag(1)
+
+#     ltm.readAllFiles()
+
+#     total_ids = len(ltm.leaders.index) + len(ltm.GMs.index) + len(ltm.site_leads.index)
+
+#     for index in tqdm(range(total_ids), desc="LTM process"):
+#         if index < len(ltm.leaders.index):
+#             ltm.setLeader(ltm.leaders.iloc[index, :].values[0])
+#         elif index < len(ltm.leaders.index) + len(ltm.GMs.index):
+#             row = ltm.GMs.iloc[index - len(ltm.leaders.index), :]
+#             ltm.setLeader(row["GM ID"], row["GM Org"])
+#         else:
+#             row = ltm.site_leads.iloc[index - len(ltm.leaders.index) - len(ltm.GMs.index), :]
+#             ltm.setLeader(row["Site Lead ID"], False, row["Site Name"])
+        
+#         ## do main process to calculate report.
+#         ltm.calculateValues()
+
+#         ## make report dataframe to output.
+#         ltm.makeReport()
+
+#         ## write output file (Mockup STAR.xlsx)
+#         ltm.writeOutput()
+
+#     print("complete LTM!")
