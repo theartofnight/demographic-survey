@@ -12,6 +12,7 @@ from openpyxl.utils.units import pixels_to_EMU as p2e
 from openpyxl.chart import BarChart, Series, Reference
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.chart.label import DataLabelList
+from decimal import Decimal
 from tqdm import tqdm
 
 class DemographicFileMaker:
@@ -71,14 +72,15 @@ class DemographicFileMaker:
         self.leaders = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Leader")
         self.GMs = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="GM")
         self.site_leads = pd.read_excel(self.input_source + "/" + self.leader_file, engine="openpyxl", sheet_name="Site Leader")
-        # self.how2use_pd = pd.read_excel(self.input_source + "/" + self.how2use_file, engine="openpyxl", sheet_name="Demographic Trends How to Use")
         self.GM_levels = pd.read_excel(self.input_source + "/" + self.GM_levels_file, engine="openpyxl")
 
     def calculateValues(self):
         
         ## do some process referred to individual leader ID.
         self._preProcess()
-        self._prepareColumnsForID()
+        _ = self._prepareColumnsForID()
+        if _:
+            return _
 
         item_list = []
         item_dict = {}
@@ -165,7 +167,7 @@ class DemographicFileMaker:
         ## make a workbook and sheet.
         self.book = openpyxl.Workbook()
         sheet = self.book.active
-        sheet.title = "Demographic Trends"
+        sheet.title = "{} Demographic Trends".format(self.current_year)
 
         ## set styles like font, color, direction, border...
         ft = Font(name="Arial", size=8)
@@ -239,7 +241,7 @@ class DemographicFileMaker:
 
                     ## set value to cell.
                     try:
-                        cell.value = round(item[0], 2)
+                        cell.value = round(Decimal(str(item[0])), 2)
                     except:
                         cell.value = item[0]
 
@@ -363,7 +365,7 @@ class DemographicFileMaker:
                 
                 ## set value to cell.
                 try:
-                    cell.value = round(item[0], 2)
+                    cell.value = round(Decimal(str(item[0])), 2)
                 except:
                     cell.value = item[0]
 
@@ -419,7 +421,7 @@ class DemographicFileMaker:
                     ## force adding PLUS symbol.
                     if column[0][0][0] == "Δ":
                         try:
-                            if item[0] > 0:
+                            if item[0] > 0.005:
                                 cell.number_format = "+0%"
                         except:
                             pass
@@ -665,6 +667,8 @@ class DemographicFileMaker:
         self.output_path = "/" + leader_entry["Worker Name"].values[0]
         self.file_name = leader_entry["Worker Last Name"].values[0]
 
+        _name = leader_entry["Worker Name"].values[0]
+
         supervisor_level = leader_level - 1
         direct_level = leader_level + 1
 
@@ -686,6 +690,7 @@ class DemographicFileMaker:
             self._invited = len(self._invited_demographics_data.index)
         else:
             if self.GM:
+                _name = self.GM
                 self._your_org = self._gm_demographics_data
                 self._invited = len(self._invited_demographics_data[self._invited_demographics_data[self.GM] == 1].index)
 
@@ -705,6 +710,7 @@ class DemographicFileMaker:
                         
                         self._parent_org = self._answered_demographics_data[self._answered_demographics_data[_org_name] == 1].reset_index(drop=True)
             elif self.site_lead:
+                _name = self.site_lead
                 self._your_org = self._site_demographics_data
                 self._invited = len(self._invited_demographics_data[self._invited_demographics_data[self.site_lead] == 1].index)
 
@@ -712,6 +718,9 @@ class DemographicFileMaker:
                 self._your_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
                 self._invited = len(self._invited_demographics_data[self._invited_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
         
+        if len(self._your_org.index) < 4:
+            return self._leader_id, _name
+
         ## calculate nums of participated
         self._participated = len(self._your_org.loc[:, "Worker ID"])
         
@@ -937,7 +946,7 @@ class DemographicFileMaker:
             "Ethnicity (US)": sorted(self._get_names_from_field(self._ethnicity_fields)),
             "Gender x Ethnicity (US)": self._get_names_from_field(self._gender_ethnicity_fields),
             "Age Group": self._get_names_from_field(self._age_fields),
-            "Department": self._get_names_from_field(self._department_fields),
+            "Function": self._get_names_from_field(self._department_fields),
             "Region": self._get_names_from_field(self._region_fields),
             "Country": self._get_names_from_field(self._country_fields),
             "Kite": self._get_names_from_field(self._kite_fields),
@@ -1048,7 +1057,7 @@ class DemographicFileMaker:
         self._calculateSubFields(self._region_fields, "Region", item)
 
         ## calculate department %s
-        self._calculateSubFields(self._department_fields, "Department", item)
+        self._calculateSubFields(self._department_fields, "Function", item)
 
         ## calculate affiliate %s
         if self.use_affiliate:
@@ -1341,7 +1350,7 @@ class LTMaker:
 
                     ## set value to cell.
                     try:
-                        cell.value = round(item[0], 2)
+                        cell.value = round(Decimal(str(item[0])), 2)
                     except:
                         cell.value = item[0]
                 
@@ -1431,7 +1440,7 @@ class LTMaker:
                     
                     ## set value to cell.
                     try:
-                        cell.value = round(item[0], 2)
+                        cell.value = round(Decimal(str(item[0])), 2)
                     except:
                         cell.value = item[0]
 
@@ -1467,7 +1476,7 @@ class LTMaker:
                         pass
 
                     try:
-                        if item[0] > 0:
+                        if item[0] > 0.005:
                             cell.number_format = "+0%"
                     except:
                         pass
@@ -1879,7 +1888,12 @@ class LTMaker:
         self._ethnicity_fields = []
         _dict = self._your_org.groupby("Ethnicity (US)").groups
         for key in _dict:
-            self._ethnicity_fields.append([key, _dict[key]])
+            if not key == "Non-US":
+                self._ethnicity_fields.append([key, _dict[key]])
+        try:
+            self._ethnicity_fields.append(["Non-US", _dict["Non-US"]])
+        except:
+            pass
 
         self._ethnicity_past_fields = {}
         _dict = self._your_past_org.groupby("Ethnicity (US)").groups
@@ -2072,7 +2086,7 @@ class LTMaker:
             "Ethnicity (US)": self._get_names_from_field(self._ethnicity_fields),
             "Gender x Ethnicity (US)": self._get_names_from_field(self._gender_ethnicity_fields),
             "Age Group": self._get_names_from_field(self._age_fields),
-            "Department": self._get_names_from_field(self._department_fields),
+            "Function": self._get_names_from_field(self._department_fields),
             "Region": self._get_names_from_field(self._region_fields),
             "Country": self._get_names_from_field(self._country_fields),
             "Kite": self._get_names_from_field(self._kite_fields),
@@ -2195,7 +2209,7 @@ class LTMaker:
         self._calculateSubFields(self._region_fields, self._region_past_fields, "Region", item)
 
         ## calculate department %s
-        self._calculateSubFields(self._department_fields, self._department_past_fields, "Department", item)
+        self._calculateSubFields(self._department_fields, self._department_past_fields, "Function", item)
 
         ## calculate affiliate %s
         if self.use_affiliate:
@@ -2383,7 +2397,7 @@ class SSM:
         img.width = 110
 
         ## calculate total rows that will be placed in our output file.
-        total_rows = 6 + len(self._item_list)
+        total_rows = 7 + len(self._item_list)
 
         ## make a workbook and sheet.
         self.book = openpyxl.Workbook()
@@ -2414,49 +2428,65 @@ class SSM:
                 cell.font = ft
         
         for col in range(1, 80):
-            sheet.column_dimensions[ce.get_column_letter(col)].width = 5.3
+            sheet.column_dimensions[ce.get_column_letter(col)].width = 6.5
+
+        ## set width and height of columns.
+        # sheet.column_dimensions[ce.get_column_letter(1)].width = 40
+        sheet.column_dimensions[ce.get_column_letter(1)].width = 6
+        sheet.column_dimensions[ce.get_column_letter(2)].width = 4
+        sheet.column_dimensions[ce.get_column_letter(3)].width = 26
+        sheet.column_dimensions[ce.get_column_letter(4)].width = 4
+
+        # sheet.column_dimensions[ce.get_column_letter(2)].width = 40
+        sheet.column_dimensions[ce.get_column_letter(5)].width = 20
+        sheet.column_dimensions[ce.get_column_letter(6)].width = 4
+        sheet.column_dimensions[ce.get_column_letter(7)].width = 16
+
+        sheet.column_dimensions[ce.get_column_letter(8)].width = 1
 
         ## insert image.
         sheet.row_dimensions[2].height = 20
         size = XDRPositiveSize2D(p2e(80), p2e(60))
-        marker = AnchorMarker(col=4, colOff=p2e(0), row=0, rowOff=p2e(10))
+        marker = AnchorMarker(col=9, colOff=p2e(0), row=0, rowOff=p2e(10))
         img.anchor = OneCellAnchor(_from=marker, ext=size)
 
         sheet.add_image(img)
 
         ## fill fifth row.
-        _value = "Your Org"
+        __value = "Your Org"
         if self.GM:
-            _value = self.GM
+            __value = self.GM
         elif self.site_lead:
-            _value = self.site_lead.replace(" / ", " ")
+            __value = self.site_lead
         if self.logic == 1:
-            _value = "Gilead Overall"
-        cell = sheet.cell(row=5, column=2)
-        cell.value = _value
+            __value = "Gilead Overall"
+        sheet.merge_cells(start_row=5, end_row=5, start_column=5, end_column=7)
+        sheet.merge_cells(start_row=6, end_row=6, start_column=5, end_column=7)
+        cell = sheet.cell(row=5, column=4 + 1)
+        cell.value = __value
         cell.alignment = center_alignment
         cell.font = ft_size_bold
 
-        sheet.merge_cells(start_row=5, start_column=4, end_row=5, end_column=6)
-        cell = sheet.cell(row=5, column=4)
+        sheet.merge_cells(start_row=5, start_column=9, end_row=5, end_column=11)
+        cell = sheet.cell(row=5, column=9)
         cell.value = "Deltas*"
         cell.font = ft_size_bold
 
         ## fill sixth row.
         _string = "n = " + f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + " ({}% participation)".format(round(self._participated / self._invited * 100))
-        sheet.cell(row=6, column=2).value = _string
-        sheet.cell(row=6, column=4).value = self.past_year
-        sheet.cell(row=6, column=5).value = "Ext"
+        sheet.cell(row=6, column=4 + 1).value = _string
+        sheet.cell(row=6, column=7 + 1 + 1).value = self.past_year
+        sheet.cell(row=6, column=7 + 1 + 2).value = "Ext"
 
         _value = "Gilead"
         if self.logic == 1:
             _value = "Kite"
-        sheet.cell(row=6, column=6).value = _value
+        sheet.cell(row=6, column=7 + 1 + 3).value = _value
 
         ## fill all data.
         for index, (criteria, item) in enumerate(tqdm(self._item_list, desc="making contents...")):
             ## fill the first column.
-            row_number = index + 7
+            row_number = index + 8
             cell = sheet.cell(row=row_number, column=1)
             cell.alignment = right_alignment
             cell.value = item
@@ -2467,18 +2497,18 @@ class SSM:
             cell.font = ft
             if index == len(self._item_list) - 1:
                 cell.border = last_border
-                sheet.cell(row=row_number, column=2).border = last_border
+                sheet.cell(row=row_number, column=4 + 1).border = last_border
 
             if criteria == 0:
                 cell.border = category_border
                 cell.font = ft_bold
 
-                sheet.cell(row=row_number, column=2).border = category_border
+                sheet.cell(row=row_number, column=4 + 1).border = category_border
             
             ## fill the third group columns.
             sub_index = 0
             for key in self.left_dict:
-                cell = sheet.cell(row=row_number, column=4 + sub_index)
+                cell = sheet.cell(row=row_number, column=7 + 1 + 1 + sub_index)
                 try:
                     value = self.left_dict[key][item][0]
                 except:
@@ -2524,26 +2554,35 @@ class SSM:
                     cell.border = category_border
                 sub_index += 1
 
-        ## set width and height of columns.
-        sheet.column_dimensions[ce.get_column_letter(1)].width = 40
-        sheet.column_dimensions[ce.get_column_letter(2)].width = 35
-        sheet.column_dimensions[ce.get_column_letter(3)].width = 1
-        # sheet.row_dimensions[6].height = 25
+        ## add caption field.
+        sheet.merge_cells(start_row=2, end_row=3, start_column=1, end_column=7)
+        cell = sheet.cell(row=2, column=1)
+        cell.value = "Global Employee Survey Results"
+        cell.font = Font(name="Arial Black", size=24, color="D9D9D9", bold=True)
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        ## merge cells(first step).
+        for index in range(total_rows - 7):
+            _row = 8 + index
+            sheet.merge_cells(start_column=1, end_column=4, start_row=_row, end_row=_row)
+            sheet.merge_cells(start_column=5, end_column=7, start_row=_row, end_row=_row)
+
 
         ## add chart bar.
-        _data = Reference(sheet, min_col=37, min_row=7, max_col=39, max_row=total_rows)
+        _data = Reference(sheet, min_col=37, min_row=8, max_col=39, max_row=total_rows)
         chart = BarChart()
         chart.add_data(_data)
-        chart.height = 17.3
-        chart.width = 6.5
+        chart.height = 16.9
+        chart.width = 7.6
         chart.type = "bar"
         chart.gapWidth = 50.0
         chart.grouping = "percentStacked"
         chart.overlap = 100
         chart.legend = None
         chart.y_axis.majorGridlines = None
+        chart.y_axis.delete = True
         chart.x_axis.scaling.orientation = "maxMin"
-
+        chart.x_axis.delete = True
 
         s = chart.series[0]
         s.graphicalProperties.line.solidFill = "7f9ba7"
@@ -2553,6 +2592,7 @@ class SSM:
         s.dLbls.showCatName = False
         s.dLbls.showLegendkey = False
         s.dLbls.numFmt = "0%"
+        s.dLbls.font = Font(name="Arial", size=10)
 
         s = chart.series[1]
         s.graphicalProperties.line.solidFill = "d8dada"
@@ -2562,16 +2602,45 @@ class SSM:
         s.graphicalProperties.line.solidFill = "c2bfb5"
         s.graphicalProperties.solidFill = "c2bfb5"  
 
-        sheet.add_chart(chart, "B6")
+        sheet.add_chart(chart, "E7")
 
         ## insert custom text
-        _texts = self.custom_text.split("\n")
+        __value = "your org"
+        if self.GM:
+            __value = self.GM
+            __value = __value[:-3] + "org"
+        elif self.site_lead:
+            __value = self.site_lead
+        if self.logic == 1:
+            __value = "Gilead Overall"
+        _texts = self.custom_text.format(__value, __value).split("\n")
+        if self.logic == 1:
+            _texts[-2] = "Kite compares Kite scores to rest of Gilead (negative indicates Kite less favorable)"
         for index, _text in enumerate(_texts):
             cell = sheet.cell(row=46 + index, column=1)
             cell.value = _text
             cell.alignment = Alignment(shrinkToFit=False)
             cell.font = ft_tiny
 
+        # insert legend part.
+        cell = sheet.cell(row=total_rows + 2, column=3)
+        cell.value = "Favorable (Agree / Strongly Agree)"
+        cell.font = ft_tiny
+        cell.alignment = Alignment(horizontal="left", vertical="center", shrinkToFit=False)
+
+        cell = sheet.cell(row=total_rows + 2, column=5)
+        cell.value = "Neither Agree Nor Disagree"
+        cell.font = ft_tiny
+        cell.alignment = Alignment(horizontal="left", vertical="center", shrinkToFit=False)
+
+        cell = sheet.cell(row=total_rows + 2, column=7)
+        cell.value = "Unfavorable (Disagree / Strongly Disagree)"
+        cell.font = ft_tiny
+        cell.alignment = Alignment(horizontal="left", vertical="center", shrinkToFit=False)
+
+        sheet.cell(row=total_rows + 2, column=2).fill = PatternFill("solid", fgColor="7f9ba7")
+        sheet.cell(row=total_rows + 2, column=4).fill = PatternFill("solid", fgColor="d8dada")
+        sheet.cell(row=total_rows + 2, column=6).fill = PatternFill("solid", fgColor="c2bfb5")
 
         ## insert 'how to use' sheet
         how_sheet = self.book.create_sheet("How to Use")
@@ -3108,11 +3177,12 @@ if __name__ == "__main__":
     ## custom text for score summary file.
     init_data.update(
         {
-            'custom text': """
-            * 2018 indicates 2018 Gilead Employee Survey results (negative indicates less favorable in 2020)
-            Ext indicates vendor biotechnology & medical device benchmark across companies and geographies
-            Gilead column compares {your org/GM org/site name}'s scores to Gilead Overall (negative indicates {your org/GM org/site name} less favorable)
-            """
+            'custom text': 
+"""
+* 2018 indicates 2018 Global Employee Survey results (negative indicates less favorable in 2020)
+Ext indicates vendor biotechnology & medical device benchmark across companies and geographies
+Gilead column compares {}'s scores to Gilead Overall (negative indicates {} less favorable)
+"""
         }
     )
     ssm = SSM(**init_data)
@@ -3125,7 +3195,9 @@ if __name__ == "__main__":
 
     total_ids = len(dfm.leaders.index) + len(dfm.GMs.index) + len(dfm.site_leads.index)
 
-    for index in tqdm(range(min(total_ids, 1)), desc="total process"):
+    victims = []
+
+    for index in tqdm(range(total_ids), desc="total process"):
         if index < len(dfm.leaders.index):
             dfm.setLeader(dfm.leaders.iloc[index, :].values[0])
             ltm.setLeader(ltm.leaders.iloc[index, :].values[0])
@@ -3152,25 +3224,32 @@ if __name__ == "__main__":
             ssm.setLeader(row["Site Leader ID"], False, row["Site Name"])
     
         ## do main process to calculate report.
-        dfm.calculateValues()
+        result = dfm.calculateValues()
+        if not result:
+            ## make report dataframe to output.
+            dfm.makeReport()
 
-        ## make report dataframe to output.
-        dfm.makeReport()
+            ## write output file (Mockup STAR.xlsx)
+            book = dfm.getWorkBook()
 
-        ## write output file (Mockup STAR.xlsx)
-        book = dfm.getWorkBook()
+            ltm.setWorkBook(book)
 
-        ltm.setWorkBook(book)
+            ltm.calculateValues()
 
-        ltm.calculateValues()
+            ltm.makeReport()
 
-        ltm.makeReport()
+            ltm.writeOutput()
 
-        ltm.writeOutput()
+            ssm.calculateValues()
 
-        ssm.calculateValues()
+            ssm.makeReport()
 
-        ssm.makeReport()
+            ssm.writeOutput()
+        else:
+            victims.append([result[0], result[1]])
+    
+    if len(victims) > 0:
+        df = pd.DataFrame(victims, columns=["ID", "Org"])
+        df.to_excel(init_data["output_folder"] + "/rest.xlsx", index=False)
 
-        ssm.writeOutput()
     print("complete!")
