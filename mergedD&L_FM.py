@@ -152,8 +152,15 @@ class DemographicFileMaker:
             if len(criteria_dict[key]) < 2 and key != "":
                 del self.precious_dict[key]
 
+        def get_percent(numerator, denominator):
+            try:
+                value = str(round(numerator / denominator * 100)) + "% Participation Rate"
+            except:
+                value = "0% Participation Rate"
+            return value
+
         ## make a content to be displayed in the picture position.
-        field_picture_position = str(round(self._participated / self._invited * 100)) + "% Participation Rate" + \
+        field_picture_position = get_percent(self._participated, self._invited) + \
             "\n" + f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + "\n" + "(Participated / Invited)"
 
         ## prepare image.
@@ -943,7 +950,7 @@ class DemographicFileMaker:
             "2019 Performance Rating": self._get_names_from_field(self._performance_rating_fields),
             "2020 Talent Coordinate": self._get_names_from_field(self._talent_cordinate_fields),
             "Gender": self._get_names_from_field(self._gender_fields),
-            "Ethnicity (US)": sorted(self._get_names_from_field(self._ethnicity_fields)),
+            "Ethnicity (US)": self._get_names_from_field(self._ethnicity_fields),
             "Gender x Ethnicity (US)": self._get_names_from_field(self._gender_ethnicity_fields),
             "Age Group": self._get_names_from_field(self._age_fields),
             "Function": self._get_names_from_field(self._department_fields),
@@ -1260,11 +1267,17 @@ class LTMaker:
             if len(criteria_dict[key]) < 2 and key != "":
                 del self.precious_dict[key]
 
+        def get_percent(numerator, denominator):
+            try:
+                value = str(round(numerator / denominator * 100)) + "% \n"
+            except:
+                value = "0% \n"
+            return value
 
         ## make a content to be displayed in the picture position.
-        field_picture_position = self.current_year + " Participation Rate " + str(round(self._participated / self._invited * 100)) + "% \n" + \
+        field_picture_position = self.current_year + " Participation Rate " + get_percent(self._participated, self._invited) + \
             f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + "\n" + self.past_year + " Participation Rate " + \
-                str(round(self._participated_past / self._invited_past * 100)) + "% \n" + f"{self._participated_past:,d}" + ' / ' + f"{self._invited_past:,d}"
+                get_percent(self._participated_past, self._invited_past) + f"{self._participated_past:,d}" + ' / ' + f"{self._invited_past:,d}"
 
         ## calculate total rows that will be placed in our output file.
         total_rows = 5 + len(self._item_list)
@@ -2583,6 +2596,7 @@ class SSM:
         chart.y_axis.delete = True
         chart.x_axis.scaling.orientation = "maxMin"
         chart.x_axis.delete = True
+        # chart.y_axis.font = Font(name="aakar", size=15)
 
         s = chart.series[0]
         s.graphicalProperties.line.solidFill = "7f9ba7"
@@ -2592,7 +2606,7 @@ class SSM:
         s.dLbls.showCatName = False
         s.dLbls.showLegendkey = False
         s.dLbls.numFmt = "0%"
-        s.dLbls.font = Font(name="Arial", size=10)
+        # s.font = Font(name="aakar", size=15)
 
         s = chart.series[1]
         s.graphicalProperties.line.solidFill = "d8dada"
