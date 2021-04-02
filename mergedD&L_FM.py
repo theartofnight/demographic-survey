@@ -1762,7 +1762,11 @@ class LTMaker:
                         
                         self._parent_org = self._answered_demographics_data[self._answered_demographics_data[_org_name] == 1].reset_index(drop=True)
                         self._parent_past_org = self._answered_demographics_past_data[self._answered_demographics_past_data[_org_name] == 1].reset_index(drop=True)
-
+            elif self.site_lead:
+                self._your_org = self._site_demographics_data
+                self._invited = len(self._invited_demographics_data[self._invited_demographics_data[self.site_lead] == 1].index)
+                self._invited_past = len(self._invited_demographics_past_data[self._invited_demographics_past_data[self.site_lead] == 1].index)
+            
             else:
                 self._your_org = self._answered_demographics_data[self._answered_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
                 self._invited = len(self._invited_demographics_data[self._invited_demographics_data.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True).iloc[:, 0])
