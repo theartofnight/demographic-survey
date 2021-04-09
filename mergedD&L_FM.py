@@ -2139,11 +2139,11 @@ class LTMaker:
 
         # filter_item = self._item_pd[self._item_pd["Item ID"].isin(id_list)]["Unique Item Code"].tolist()
         # Hi May, the below bounded area is changed part.
-        #########################################################################################################
+        #######################################################################################################
         filter_item = []
         for item_id in id_list:
             filter_item.append(self._item_pd[self._item_pd["Item ID"] == item_id]["Unique Item Code"].values[0])
-        #########################################################################################################
+        #######################################################################################################
         _items  = ['ExternalReference']
         _items_past = ['ExternalReference']
 
