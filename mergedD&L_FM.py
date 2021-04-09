@@ -18,7 +18,7 @@ from tqdm import tqdm
 class DemographicFileMaker:
 
     def __init__(self, **args):
-        ## initialize the object by specifying input and output files.
+        ## initialize the object by specifying input and output files. 
         self.image_src = args['image']
 
         self.raw_data_file = args['raw_data']
