@@ -744,21 +744,19 @@ class DemographicFileMaker:
 
 
         ## make direct report fields.
-        self._direct_report_field = []
-        temp_org = self._your_org[~(self._your_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
+        if not self.GM:
+            self._direct_report_field = []
+            temp_org = self._your_org[~(self._your_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
+            
+            if self.site_lead:
+                temp_org = temp_org[temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
 
-        if self.GM:
-            temp_org = temp_org[temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
-        
-        if self.site_lead:
-            temp_org = temp_org[temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
-
-        _dict = temp_org.groupby(_temp.format(direct_level)).groups
-        for key in _dict:
-            try:
-                self._direct_report_field.append([self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0], _dict[key]])
-            except:
-                pass
+            _dict = temp_org.groupby(_temp.format(direct_level)).groups
+            for key in _dict:
+                try:
+                    self._direct_report_field.append([self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0], _dict[key]])
+                except:
+                    pass
 
         ## make grade group fields.
         self._grade_group_fields = []
@@ -1789,38 +1787,33 @@ class LTMaker:
         self._participated_past = len(self._your_past_org.loc[:, "Worker ID"])
 
         ## make direct report fields.
-        self._direct_report_field = []
-        self.temp_org = self._your_org[~(self._your_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
+        if not self.GM:
+            self._direct_report_field = []
+            self.temp_org = self._your_org[~(self._your_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
 
-        if self.GM:
-            self.temp_org = self.temp_org[self.temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+            if self.site_lead:
+                self.temp_org = self.temp_org[self.temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
 
-        if self.site_lead:
-            self.temp_org = self.temp_org[self.temp_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
+            _dict = self.temp_org.groupby(_temp.format(direct_level)).groups
+            for key in _dict:
+                try:
+                    self._direct_report_field.append([self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0], _dict[key]])
+                except:
+                    pass
+            
+            self._direct_report_past_field = {}
+            self.temp_past_org = self._your_past_org[~(self._your_past_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
+            
+            if self.site_lead:
+                self.temp_past_org = self.temp_past_org[self.temp_past_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
 
-        _dict = self.temp_org.groupby(_temp.format(direct_level)).groups
-        for key in _dict:
-            try:
-                self._direct_report_field.append([self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0], _dict[key]])
-            except:
-                pass
-        
-        self._direct_report_past_field = {}
-        self.temp_past_org = self._your_past_org[~(self._your_past_org.loc[:, "Worker ID"] == self._leader_id)].reset_index(drop=True)
-
-        if self.GM:
-            self.temp_past_org = self.temp_past_org[self.temp_past_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
-        
-        if self.site_lead:
-            self.temp_past_org = self.temp_past_org[self.temp_past_org.loc[:, _temp.format(leader_level)] == self._leader_id].reset_index(drop=True)
-
-        _dict_past = self.temp_past_org.groupby(_temp.format(direct_level)).groups
-        for key in _dict:
-            try:
-                _values = _dict_past[key]
-            except:
-                _values = [0]
-            self._direct_report_past_field.update({self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0]: _values})
+            _dict_past = self.temp_past_org.groupby(_temp.format(direct_level)).groups
+            for key in _dict:
+                try:
+                    _values = _dict_past[key]
+                except:
+                    _values = [0]
+                self._direct_report_past_field.update({self.origin_demographics_pd[self.origin_demographics_pd.loc[:, "Worker ID"] == key].loc[:, "Worker Name"].values[0]: _values})
 
         ## make grade group fields.
         self._grade_group_fields = []
@@ -2144,7 +2137,13 @@ class LTMaker:
 
     def _filterResource(self, id_list, category):
 
-        filter_item = self._item_pd[self._item_pd["Item ID"].isin(id_list)]["Unique Item Code"].tolist()
+        # filter_item = self._item_pd[self._item_pd["Item ID"].isin(id_list)]["Unique Item Code"].tolist()
+        # Hi May, the below bounded area is changed part.
+        ########################################################################################################
+        filter_item = []
+        for item_id in id_list:
+            filter_item.append(self._item_pd[self._item_pd["Item ID"] == item_id]["Unique Item Code"].values[0])
+        ########################################################################################################
         _items  = ['ExternalReference']
         _items_past = ['ExternalReference']
 
