@@ -15,6 +15,19 @@ from openpyxl.chart.label import DataLabelList
 from decimal import Decimal
 from tqdm import tqdm
 
+
+def normal_round(num, ndigits=0):
+    """
+    Rounds a float to the specified number of decimal places.
+    num: the value to round
+    ndigits: the number of digits to round to
+    """
+    if ndigits == 0:
+        return int(num + 0.5)
+    else:
+        digit_value = 10 ** ndigits
+        return int(num * digit_value + 0.5) / digit_value
+
 class DemographicFileMaker:
 
     def __init__(self, **args):
@@ -154,7 +167,7 @@ class DemographicFileMaker:
 
         def get_percent(numerator, denominator):
             try:
-                value = str(round(numerator / denominator * 100)) + "% Participation Rate"
+                value = str(normal_round(numerator / denominator * 100)) + "% Participation Rate"
             except:
                 value = "0% Participation Rate"
             return value
@@ -248,7 +261,7 @@ class DemographicFileMaker:
 
                     ## set value to cell.
                     try:
-                        cell.value = round(Decimal(str(item[0])), 2)
+                        cell.value = normal_round(item[0], 2)
                     except:
                         cell.value = item[0]
 
@@ -340,7 +353,7 @@ class DemographicFileMaker:
         
         ## below method is used to calculate delta.
         def get_delta(first, second):
-            return round(second * 100 - first * 100)
+            return normal_round(second * 100 - first * 100)
 
         gilead_org = frames[0]
 
@@ -372,7 +385,7 @@ class DemographicFileMaker:
                 
                 ## set value to cell.
                 try:
-                    cell.value = round(Decimal(str(item[0])), 2)
+                    cell.value = normal_round(item[0], 2)
                 except:
                     cell.value = item[0]
 
@@ -420,7 +433,7 @@ class DemographicFileMaker:
                         _ = 0
                     if col_index == self.logic + _ or col_index == self.logic + 1 + _:
                         try:
-                            cell.fill = PatternFill("solid", fgColor=self._get_color(round(item[0] * 100)))
+                            cell.fill = PatternFill("solid", fgColor=self._get_color(normal_round(item[0] * 100)))
                         except:
                             ## this skip the case of N/A
                             pass
@@ -1267,7 +1280,7 @@ class LTMaker:
 
         def get_percent(numerator, denominator):
             try:
-                value = str(round(numerator / denominator * 100)) + "% \n"
+                value = str(normal_round(numerator / denominator * 100)) + "% \n"
             except:
                 value = "0% \n"
             return value
@@ -1361,7 +1374,7 @@ class LTMaker:
 
                     ## set value to cell.
                     try:
-                        cell.value = round(Decimal(str(item[0])), 2)
+                        cell.value = normal_round(item[0], 2)
                     except:
                         cell.value = item[0]
                 
@@ -1451,7 +1464,7 @@ class LTMaker:
                     
                     ## set value to cell.
                     try:
-                        cell.value = round(Decimal(str(item[0])), 2)
+                        cell.value = normal_round(item[0], 2)
                     except:
                         cell.value = item[0]
 
@@ -1476,12 +1489,12 @@ class LTMaker:
                     cell.number_format = numbers.FORMAT_PERCENTAGE
 
                     try:
-                        cell.fill = PatternFill("solid", fgColor=self._get_color(round(item[0] * 100)))
+                        cell.fill = PatternFill("solid", fgColor=self._get_color(normal_round(item[0] * 100)))
                     except:
                         pass
 
                     try:
-                        if abs(round(item[0] * 100)) == 100:
+                        if abs(normal_round(item[0] * 100)) == 100:
                             sheet.column_dimensions[ce.get_column_letter(get_column_number(2 + col_index))].width = 5.2
                     except:
                         pass
@@ -2489,7 +2502,7 @@ class SSM:
         cell.font = ft_size_bold
 
         ## fill sixth row.
-        _string = "n = " + f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + " ({}% participation)".format(round(self._participated / self._invited * 100))
+        _string = "n = " + f"{self._participated:,d}" + ' / ' + f"{self._invited:,d}" + " ({}% participation)".format(normal_round(self._participated / self._invited * 100))
         sheet.cell(row=6, column=4 + 1).value = _string
         sheet.cell(row=6, column=7 + 1 + 1).value = self.past_year
         sheet.cell(row=6, column=7 + 1 + 2).value = "Ext"
